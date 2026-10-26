@@ -17,7 +17,7 @@ StrutClient.entity(HERO);
 ServerAnimationStates.forEntity(entity, false).play("base", "walk", entity.getWorld().getTime());
 ```
 
-The guide is in [`doc/`](doc/index.html): open `doc/index.html` in a browser, nothing to build. Every Java sample in it is compiled by the build.
+The guide is at **https://sandyymandy.github.io/Strut/**, and is also in [`doc/`](doc/index.html): open `doc/index.html` in a browser, nothing to build. Every Java sample in it is compiled by the build.
 
 ## If you know GeckoLib: what is different
 
@@ -93,7 +93,7 @@ and in `fabric.mod.json`:
 }
 ```
 
-Players install the mod from Modrinth like any other. [Getting started](doc/getting-started.html) takes a first entity from nothing in five steps. To build Strut
+Players install the mod from Modrinth like any other. [Getting started](https://sandyymandy.github.io/Strut/getting-started.html) takes a first entity from nothing in five steps. To build Strut
 from source instead, run `./gradlew publishToMavenLocal` and depend on `com.sandymandy.strut:strut-fabric-1.21.1:1.0.0` from `mavenLocal()`.
 
 ## The Blockbench plugin

@@ -14,10 +14,8 @@
 <p class="lead">The guide pages cover what you need day to day. Every public class and method is in the generated Javadoc.</p>
 
 <h2 id="javadoc">The Javadoc</h2>
-<p>The Javadoc is generated from the source, so it is always current, and is not stored in the repository. Build it once:</p>
-<pre><code>./gradlew javadoc
-java tools/CopyApiDocs.java</code></pre>
-<p>That places it in <code>doc/api/</code>, and <a href="api/index.html">the API index</a> opens from there. (The link is dead until you have built it.)</p>
+<p>The Javadoc is generated from the source when the site is published, so it is always current, and is not stored in the repository. On the published site, <a href="api/index.html">the API index</a> opens it.</p>
+<p>To read it offline, build it with <code>./gradlew javadoc</code> and open <code>build/docs/javadoc/index.html</code>. (The link above only works on the published site.)</p>
 
 <h2 id="packages">Where things are</h2>
 <table>
