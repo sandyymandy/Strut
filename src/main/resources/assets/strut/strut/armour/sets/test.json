@@ -1,0 +1,11 @@
+{
+  "slots": {
+    "head": "strut:armour/test_head",
+    "chest": "strut:armour/test_chest",
+    "legs": "strut:armour/test_legs",
+    "feet": "strut:armour/test_feet"
+  },
+  "texture": "strut:textures/armour/test_armour.png",
+  "texture_size": [512, 64],
+  "column": [64, 0]
+}

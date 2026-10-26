@@ -1,0 +1,24 @@
+# Gradle
+.gradle/
+build/
+buildSrc/build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.settings/
+.classpath
+.project
+
+# Minecraft dev
+run/
+runs/
+logs/
+.mixin.out/
+
+# Generated API documentation (./gradlew javadoc, then java tools/CopyApiDocs.java)
+doc/api/

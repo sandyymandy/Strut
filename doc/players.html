@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Players with a Strut body - Strut docs</title>
+<link rel="stylesheet" href="assets/style.css">
+<script src="assets/docs.js" defer></script>
+</head>
+<body>
+<div class="layout">
+<main>
+<h1>Players with a Strut body</h1>
+<p class="lead">Draw a player as a Strut model, with no second entity beside them.</p>
+
+<p>A <strong>body</strong> is a Strut model, and the controllers that animate it, that a player can be given in place of the player model. The player stays the player: they move, collide, take damage and are tracked as before. What changes is how every client draws them. Bodies are for any mod: a morph, a disguise, a race, a shapeshift.</p>
+<p><em>Status: built are bodies, assignment, the renderer, bone overrides, server-driven clips and locomotion. First-person modes, held items, the scene anchor, menu previews and hitbox sizes are built too; armour is drawn by the armour system (<code>PlayerBody.Builder#armour</code>, see <a href="armour.html">armour</a>), and capes and elytras are not drawn on a body. It has not been tried in a running game yet.</em></p>
+
+<h2 id="register">Register a body</h2>
+<p>Register the same body on the server and on every client, from your mod initialiser (the common entrypoint runs on both):</p>
+<pre><code>PlayerBodies.register(PlayerBody.builder(new Identifier("mymod", "fox"))
+		.controllers(registrar -&gt; registrar.add(new AnimationController&lt;&gt;(PlayerBody.class, "main", 5, state -&gt; state.setAndContinue(RawAnimation.begin().thenLoop("idle")))))
+		.build());</code></pre>
+<p>The model, texture and animations come from the same folders as an entity of that name: <code>strut/models/entity/fox.strutmodel</code>, <code>textures/entity/fox.png</code>, <code>strut/animations/entity/fox.strutanim</code>, in the id's namespace. To choose differently, give the body a model on the client:</p>
+<pre><code>StrutPlayersClient.model(new Identifier("mymod", "fox"), myModel);</code></pre>
+<p>A model can read <code>StrutPlayersClient.renderedPlayer()</code> while it is asked for its texture or animation file, to pick them by <code>StrutPlayers.variant(player)</code>.</p>
+
+<h2 id="locomotion">Walking, sneaking, swimming and the rest</h2>
+<p>Add <code>.locomotion()</code> to the builder and the body moves by itself, from what the player is doing, choosing among the clips its animation file has. It looks for them in this order, taking the first that exists, so a body with only <code>idle</code> and <code>walk</code> still works everywhere:</p>
+<table>
+<tr><th>Doing</th><th>Clips</th></tr>
+<tr><td>dead</td><td><code>death</code> (played once, held)</td></tr>
+<tr><td>sleeping</td><td><code>sleep</code>, <code>idle</code></td></tr>
+<tr><td>riding</td><td><code>ride_boat</code>, <code>ride_minecart</code> or <code>ride_mount</code> (for that vehicle), <code>ride</code>, <code>sit</code></td></tr>
+<tr><td>gliding with an elytra</td><td><code>gliding</code>, <code>glide</code>, <code>elytra</code>, <code>fly</code>, <code>fall</code></td></tr>
+<tr><td>swimming</td><td><code>swim</code> when moving, else <code>swim_idle</code>, <code>tread</code>; then <code>walk</code> or <code>idle</code></td></tr>
+<tr><td>crawling</td><td><code>crawl</code> or <code>crawl_idle</code>, then the sneak clips</td></tr>
+<tr><td>climbing</td><td><code>climb</code>, then <code>walk</code> or <code>idle</code></td></tr>
+<tr><td>flying (creative, yourself only)</td><td><code>fly</code>, <code>fall</code></td></tr>
+<tr><td>falling</td><td><code>fall</code>, <code>idle</code></td></tr>
+<tr><td>sneaking</td><td><code>sneak_walk</code> or <code>sneak_idle</code>, <code>sneak</code>, then <code>walk</code> or <code>idle</code></td></tr>
+<tr><td>sprinting</td><td><code>run</code>, <code>sprint</code>, <code>walk</code></td></tr>
+<tr><td>walking, standing</td><td><code>walk</code>, <code>idle</code></td></tr>
+</table>
+<p>A second controller, <code>actions</code>, plays over those: <code>swing_main</code> or <code>swing_off</code> (then <code>swing</code>) once for each hand swing, and <code>use_eat</code>, <code>use_drink</code>, <code>use_block</code>, <code>use_bow</code>, <code>use_spear</code>, <code>use_crossbow</code>, <code>use_spyglass</code>, <code>use_horn</code>, <code>use_brush</code> (then <code>use</code>) while an item is used. While the server is playing a clip on the body, both stand aside, so a scene is not walked over.</p>
+<p>The same facts are on every body's animation state as <code>PlayerTickets.MOTION</code> (a <code>PlayerMotion</code>), for controllers of your own. The head bone (<code>head</code> by default, <code>builder.headBone(name)</code> to change or <code>null</code> for none) turns to where the player looks, in the conventional model. A file whose clips are named <code>animation.base.walk</code> is read with <code>builder.clipPrefix("animation.base.")</code>, <code>crouch</code> is understood for <code>sneak</code>, and <code>builder.clipAlias("death", "downed")</code> adds another name for a role. <code>builder.hideBones(...)</code> hides bones whenever the body is drawn (the server can show one with an override).</p>
+
+<h2 id="first-person">First person</h2>
+<p>By default (<code>FirstPersonMode.VANILLA</code>) nothing changes in first person: the camera is at the player's eyes and the game draws the vanilla arm and held item. A body can instead make the player look out of it:</p>
+<pre><code>PlayerBody.builder(id).locomotion()
+		.firstPerson(FirstPersonMode.IMMERSIVE)
+		.eyeBone("eyes")                  // the camera sits here; a bone with no geometry, placed at the eyes
+		.hideInFirstPerson("head")        // hidden for the player themself only; others still see it
+		.build();</code></pre>
+<p>In <code>IMMERSIVE</code> the whole body is drawn and the camera is put at the eye bone of the animated pose, so the player sees their own arms and chest and the camera moves with a walk or a crouch. Only the camera moves: the eye position that aiming, hits and projectiles use stays the player's own, so nothing disagrees with the server. The camera is placed from where the bone was drawn in the frame before, and is left alone (the vanilla camera) if the bone is missing or more than four blocks from the player. The vanilla arm and held item are not drawn in this mode, so give the body hand items (above) to see what is held.</p>
+
+<h2 id="anchor">Drawing the body somewhere else</h2>
+<pre><code>StrutPlayers.setAnchor(player, bedPosition, 90f);   // server: everyone sees the body there, facing 90 degrees
+StrutPlayers.clearAnchor(player);</code></pre>
+<p>For a scene on a bed or at a mark: the body is drawn at the anchor and faces the way it says, while the player stays where they are (their position, hitbox and what hits them do not change). In first person with an immersive body the camera goes with the body. The anchor lasts until it is cleared, or the player respawns or leaves. In a development environment, <code>/strut body anchor</code> puts your body three blocks ahead facing you and <code>/strut body unanchor</code> brings it back.</p>
+
+<h2>One body, many characters: variants</h2>
+<p>A body is registered once and a player is given a <em>variant</em> of it (the string given to <code>StrutPlayers.setBody</code>). Anything that differs for a variant is given by a function, which is asked often (a hitbox every tick), so it should look something up:</p>
+<pre><code>PlayerBody.builder(id).locomotion().dimensions(0.6f, 1.8f, 1.62f).armour(creatureProfile)
+		.variants(variant -&gt; BodyVariant.builder().dimensions(0.5f, 1.2f, 1.05f).armour(profileOf(variant)).eyeBone("kobolCam").build())
+		.animationFiles(variant -&gt; List.of(fileOf(variant), baseFile))      // what the server finds a clip's events and length by
+		.eventBindings(variant -&gt; List.of(bindingsOf(variant)))             // the sounds and lines of a character
+		.onServerEvent(context -&gt; ...).onClientEvent(context -&gt; ...)       // as StrutEntity#onAnimationEvent
+		.build();</code></pre>
+<p>A <code>BodyVariant</code> can change the hitbox, the armour profile, the eye bone, the bones always hidden, the bones hidden in first person, the hand item bones and the first person mode; what it leaves out is the body's. The model, texture and animation files of a variant are chosen by the body's model (<code>StrutPlayersClient.model</code>), which reads the variant of <code>StrutPlayersClient.renderedPlayer()</code>.</p>
+<p>On the server, <code>StrutPlayers.clipLengthTicks(player, clip)</code> is a clip's length as the server finds it and <code>StrutPlayers.hasEnded(player, controller)</code> says whether what <code>StrutPlayers.play</code> started has run to its end (a clip held on its last frame has ended too), so a scene can step on when a clip is over.</p>
+<h2>Showing a body in a menu, turned by you</h2>
+<pre><code>StrutPlayersClient.drawBody(context, bodyId, variant, x1, y1, x2, y2, 30, yawDegrees, pitchDegrees, player -&gt; ClientFlags.preview(true));</code></pre>
+<p>With a yaw (0 faces the viewer, 180 shows the back) and a pitch in place of the mouse, a preview the player drags round. The last argument, which may be null, runs on the preview player each time it is drawn, before it is: the preview player is one for every call, so a model that reads a client-only flag from it (the stripped form) is told it there.</p>
+<h2>The camera and bones, chosen at run time</h2>
+<pre><code>StrutPlayersClient.eyeBone(player -&gt; inScene(player) ? "boyCam" : null);          // null: the body's
+StrutPlayersClient.firstPerson(player -&gt; option ? FirstPersonMode.IMMERSIVE : FirstPersonMode.VANILLA);
+Vec3d at = StrutPlayersClient.bonePosition(player, "boyCam");   // relative to the player, in world axes, as last drawn</code></pre>
+<p><code>bonePosition</code> answers null the first time it is asked for a bone (it starts keeping track of it), then the place as of the last frame; a bone not asked for for two seconds is let go of. It is how a rider is put at a bone.</p>
+<h2 id="preview">Showing a body in a menu</h2>
+<pre><code>StrutPlayersClient.drawBody(context, bodyId, "red", x1, y1, x2, y2, 30, mouseX, mouseY);</code></pre>
+<p>Draws a body the way the inventory draws the player: in a box, turned toward the mouse, standing still, with the variant given. It is for a screen that lets a player see what a body would look like before choosing it. It needs a world, so nothing is drawn in the title screen (it returns <code>false</code>). The body is drawn on a player that is not in the world, so it has no name tag and its animation state is its own.</p>
+
+<h2 id="dimensions">Hitbox and eye height</h2>
+<pre><code>PlayerBody.builder(id).dimensions(0.5f, 1.5f, 1.35f).build();   // width, height, eye height, in blocks</code></pre>
+<p>A body can give the player a different size when standing: the hitbox and the height they aim from, on both the server and the client, so they agree about what fits where. The game's other poses (sneaking, swimming, sleeping) keep their shape in proportion. This changes what a player can do, so a server has to be happy with it; nothing is changed unless the body sets it.</p>
+
+<h2 id="poses">Sleeping, swimming and gliding</h2>
+<pre><code>PlayerBody.builder(id).sleepRotation(false).swimTilt(false).glideTilt(false)</code></pre>
+<p>The renderer does what the vanilla player does around the clips: lays the body down in a bed, leans it along the water while swimming or crawling, and flies it forward and banks it while gliding. Each is on by default and can be turned off for a body whose clip does that itself. With <code>sleepRotation(false)</code> the body is only turned to face along the bed. </p>
+
+<p>Swimming plays the <code>swim</code> clip only in the swimming pose; wading and treading water use the walk and idle clips. While swimming or gliding the head does not turn to the camera. For a body with an immersive camera, what the crosshair aims at and what is shot start at the eye bone, where the camera is . The client tells the server where the eye bone is (a few times a second while it moves), and the server aims from there too, for a player with an immersive body; an offset of more than four blocks is ignored.</p>
+
+<p>Hand swings play <code>swing_main</code> / <code>swing_off</code> or <code>swing</code> if the file has them, and otherwise the combo <code>attack0</code>, <code>attack1</code>, ... one for each swing in turn; a swing's clip plays out in full. Using an item plays <code>&lt;item&gt;_charge</code> once and then holds <code>&lt;item&gt;_idle</code> (<code>bow</code>, <code>crossbow</code>, <code>shield</code>, and so on), from the start again each time the item is used, then blends out through the <code>null</code> clip when the use ends. A loaded crossbow in hand holds <code>crossbow_idle</code>. Without them, <code>use_&lt;item&gt;</code> and then <code>use</code> are held. Used in the off hand, each of these is looked for with <code>_off</code> on the end first (<code>shield_idle_off</code>, <code>bow_charge_off</code>, <code>use_off</code>), as <code>swing_off</code> is for <code>swing</code>, and the main hand's clip is played if the body has no clip of its own for the off hand.</p>
+
+<h2 id="items">Held items</h2>
+<p>The item a player holds is drawn on the body when the body says which bone holds it. Nothing is drawn unless it does:</p>
+<pre><code>PlayerBody.builder(id)
+		.mainHandItem("hand_r")                                          // the bone's pivot is the hand
+		.offHandItem(HandItem.at("hand_l").offset(0, -0.1f, 0).rotation(-90f, 180f, 0f))
+		.build();</code></pre>
+<p>The item is drawn as the game draws one held in a vanilla player's third-person hand (swords, tools, blocks, shields), starting from the bone's pivot and moving with the hand's animation. The defaults turn it as a vanilla arm holds it; offsets are in blocks and rotations in degrees, in the bone's own space, to fit a rig whose hand bone is placed or turned differently.</p>
+<p>The item is drawn as the game draws it, so it changes with what the player does: a shield held up becomes the blocking model, a bow being drawn shows its pull. A body whose clip shows the use already can keep the model an item has at rest with <code>.stableHeldModels("minecraft:shield")</code> on the builder: a list of items (or tags, <code>"#minecraft:swords"</code>), so a shield stays a shield while a bow still shows its draw.</p>
+
+<h2 id="assign">Give a player a body</h2>
+<pre><code>StrutPlayers.setBody(player, new Identifier("mymod", "fox"), "red", StrutPlayers.Persistence.SAVED);   // server
+StrutPlayers.clearBody(player);                                                                          // server
+
+PlayerBody body = StrutPlayers.body(player);     // either side: null if they have none
+String variant = StrutPlayers.variant(player);   // "red"</code></pre>
+<p>The assignment is stored on the player and synced to every client that can see them, including one that comes into range later, so there is nothing to send. <code>SAVED</code> (the default) is written with the player, so it is there after a relog and a respawn; <code>SESSION</code> lasts until the player leaves, and a death keeps it. A body id that is not registered (a mod was removed) draws the ordinary player until it is.</p>
+
+<h2 id="drive">Overrides, attachments and clips</h2>
+<pre><code>StrutPlayers.overrides(player).setHidden("tail", true);      // server: everyone sees it; client: only you
+StrutPlayers.attachments(player).setItem("hand", "hand_r", itemId);
+
+StrutPlayers.play(player, "scene", "hug", LoopMode.LOOP);   // server: everyone sees it ("scene" is a controller every body has, over the others)
+StrutPlayers.stop(player, "scene");</code></pre>
+<p>Several players and entities animated together (a paired animation, a cutscene) are made with <a href="scenes.html">scenes</a>. These are the same overrides, attachments and server-driven animations an entity has: see <a href="bones.html">Bones</a> and <a href="animations.html">Playing animations</a>. A player's own client receives the state of their own player when they join, respawn or change dimension.</p>
+
+<h2 id="limits">What to know</h2>
+<ul>
+<li>What the hands hold is not drawn while the player is in a <a href="scenes.html">scene</a> (<code>builder.showHeldItemsInScenes()</code> keeps it), and <code>StrutPlayers.setHeldItemsHidden(player, true)</code> hides it on the server for everyone, until it is shown again.</li>
+<li>While one hand uses an item (a bow drawn, a shield raised, food eaten), or while a loaded crossbow is held, the item in the other hand is not drawn until the use is over, so it is not in the way of the aim; <code>builder.showOtherHandWhileUsing()</code> keeps it drawn. Items a character holds through <code>attachments().setHeldItem</code> follow the same rule.</li>
+<li>A player with a body is drawn by Strut instead of the vanilla player renderer, so another mod that adds layers to the vanilla player model (capes, cosmetics) does not draw on a body.</li>
+<li>Armour is drawn on a body when it names an armour profile (see <a href="armour.html">armour</a>); capes and elytras are not drawn on a body. In first person the vanilla arm and held item are drawn as before, except in the immersive mode, where neither is.</li>
+<li>The hitbox, camera and eye position are the player's own.</li>
+</ul>
+
+<footer>Strut documentation.</footer>
+</main>
+</div>
+</body>
+</html>

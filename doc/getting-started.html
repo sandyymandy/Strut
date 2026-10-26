@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Getting started - Strut docs</title>
+<link rel="stylesheet" href="assets/style.css">
+<script src="assets/docs.js" defer></script>
+</head>
+<body>
+<div class="layout">
+<main>
+<h1>Getting started</h1>
+<p class="lead">A Strut entity from nothing, in five steps. The example mod id is <code>mymod</code> and the entity is <code>ava</code>; use your own.</p>
+
+<h2 id="dependency">1. Add Strut</h2>
+<p>Strut is on <a href="https://modrinth.com/mod/strut">Modrinth</a>, which also serves it as a Maven repository. In your <code>build.gradle</code>:</p>
+<pre><code>repositories {
+	exclusiveContent {
+		forRepository {
+			maven {
+				name = "Modrinth"
+				url = "https://api.modrinth.com/maven"
+			}
+		}
+		filter {
+			includeGroup "maven.modrinth"
+		}
+	}
+}
+
+dependencies {
+	modImplementation "maven.modrinth:strut:1.0.0"
+}</code></pre>
+<p>The part after the last colon is the version number of the Strut release on Modrinth. In your <code>fabric.mod.json</code>:</p>
+<pre><code>"depends": {
+	"strut": "*"
+}</code></pre>
+<p>To build Strut from source instead, run <code>./gradlew publishToMavenLocal</code> in its repository, add <code>mavenLocal()</code> to <code>repositories</code> and depend on <code>com.sandymandy.strut:strut-fabric-1.21.1:1.0.0</code>.</p>
+
+<h2 id="files">2. Put the files where Strut looks</h2>
+<p>Strut finds an entity's files from its registry id. For <code>mymod:ava</code> that is:</p>
+<pre><code>assets/mymod/strut/models/entity/ava.strutmodel
+assets/mymod/textures/entity/ava.png
+assets/mymod/strut/animations/entity/ava.strutanim</code></pre>
+<p>Author them in Blockbench with the Strut plugin, which reads and writes both formats directly. See <a href="models.html">Models and files</a> for every folder and how to change the convention.</p>
+
+<h2 id="class">3. Write the entity</h2>
+<p>Implement <code>StrutEntity</code>. That is all: no animation cache field, no <code>getTick</code>, no <code>registerControllers</code>.</p>
+<pre class="sample" data-sample="entity-minimal"><code>public class HeroEntity extends PathAwareEntity implements StrutEntity {
+	public HeroEntity(EntityType&lt;? extends HeroEntity&gt; type, World world) {
+		super(type, world);
+	}
+}</code></pre>
+
+<h2 id="register">4. Register it, on both sides</h2>
+<p>Register the <code>EntityType</code> the way you always do. Then, in your <em>client</em> initialiser, one line:</p>
+<pre class="sample" data-sample="client-entity"><code>StrutClient.entity(AVA);</code></pre>
+<p>That builds the model, the renderer and the registration for you. If a file does not follow the convention, see <a href="entities.html#overrides">changing what differs</a>.</p>
+
+<h2 id="animate">5. Make it move</h2>
+<p>Animations are played by the <strong>server</strong>. Tell it which animation to play on which controller, and every client sees the same thing at the same time:</p>
+<pre class="sample" data-sample="play-animation"><code>ServerAnimationStates.forEntity(entity, false)
+		.play("base", "walk", entity.getWorld().getTime(), 0, 1f, LoopMode.LOOP);</code></pre>
+<p><code>"base"</code> is a controller name of your choosing; you do not have to register it. The first time the server plays on a name, the client creates the controller. See <a href="animations.html">Playing animations</a> for <code>seek</code>, <code>setRate</code>, <code>stop</code> and how late joiners are handled.</p>
+
+<div class="callout note">
+<p>Press <kbd>F9</kbd> in game for the render statistics overlay. See <a href="debugging.html">Commands and debugging</a>.</p>
+</div>
+
+<h2 id="next">Where next</h2>
+<ul>
+	<li>Items, armor and block entities work the same way: <a href="items-and-blocks.html">Items, armor and blocks</a>.</li>
+	<li>Run code when an animation reaches a frame: <a href="events.html">Events</a>.</li>
+	<li>Ship models and sounds from the server: <a href="asset-sync.html">Asset sync</a>.</li>
+</ul>
+
+<footer>Strut documentation.</footer>
+</main>
+</div>
+</body>
+</html>

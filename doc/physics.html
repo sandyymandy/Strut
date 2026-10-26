@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Physics - Strut docs</title>
+<link rel="stylesheet" href="assets/style.css">
+<script src="assets/docs.js" defer></script>
+</head>
+<body>
+<div class="layout">
+<main>
+<h1>Physics</h1>
+<p class="lead">Part of Strut: it makes a model's parts move with the model: spring bones that jiggle, chains for hair and tails, a ragdoll, and cloth and flesh made from a mesh's vertices. It is visual and client-side, and a model with no physics data costs one cached lookup a frame.</p>
+
+<h2 id="what">What it is, and what it is not</h2>
+<ul>
+	<li><strong>In the Strut jar.</strong> There is nothing extra to install or depend on: a mod that depends on Strut has physics (it was a separate <code>strut_physics</code> mod until it was merged into core; the data names such as the <code>strut_physics:physics</code> section and <code>strut_physics:impulse</code> keep that name so nothing already written breaks). A model without physics data is drawn as before, and players can switch physics off in the options.
+	<li><strong>Visual only.</strong> Nothing is synced and nothing affects gameplay. Every client simulates its own copy, on the game clock at a fixed 60 steps a second, so the result is the same at any frame rate and pauses with the game.</li>
+	<li><strong>The animation is always the target.</strong> Physics adds an offset to the pose, so an animated bone is never overwritten, and a weight of 0 is exactly the animation.</li>
+	<li><strong>It does not move entities.</strong> A pressed pouch or a thrown ragdoll is drawn differently; the entity stays where the game has it.</li>
+</ul>
+
+<h2 id="kinds">The kinds of part</h2>
+<table>
+	<tr><th>Spring bone</th><td>One bone with a mass on a lever that lags the model's motion and settles. Pouches, jowls, a belly. Rotates (and optionally translates) the bone.</td></tr>
+	<tr><th>Chain</th><td>Bones that each hang from the one before, simulated in world space with exact segment lengths. Hair, tails, ears, straps.</td></tr>
+	<tr><th>Ragdoll</th><td>A skeleton of joints over named bones that the body can be let go into, with a muscle that pulls it back to the animation.</td></tr>
+	<tr><th>Cloth</th><td>The vertices of a mesh on a bone: edges keep their length, folds resist, the top is sewn on. A skirt, a cape.</td></tr>
+	<tr><th>Flesh and jelly</th><td>The same machinery, pulled firmly back to the animated shape and keeping its volume, so a pressed part bulges. Pouches, belly, a slime.</td></tr>
+</table>
+
+<h2 id="give">Giving a model physics</h2>
+<p>Three ways, which layer over each other bone by bone (the later wins):</p>
+<ol>
+	<li><strong>In Blockbench.</strong> The plugin has a <strong>Physics</strong> tab beside Edit, Paint and Animate (see below). The settings are saved with the project and written into the exported <code>.strutmodel</code> as an extension section named <code>strut_physics:physics</code>.</li>
+	<li><strong>The model file.</strong> The same JSON, in that section. A <code>&lt;model&gt;.physics.json</code> placed next to the model file is read as well.</li>
+	<li><strong>A sidecar in a resource pack</strong>, to retune a model without re-exporting it:
+<pre><code>assets/&lt;namespace&gt;/strut/physics/&lt;model path without extension&gt;.json
+mymod:strut/models/bare/ava.strutmodel  ->  assets/mymod/strut/physics/strut/models/bare/ava.json
+mymod:strut/models/bare/ava.strutmodel  ->  assets/mymod/strut/physics/models/bare/ava.json</code></pre>
+	A model under <code>strut/models</code> takes its sidecar at its path without the leading <code>strut/</code>; the full <code>strut/physics/strut/models/...</code> is read too.</li>
+</ol>
+<p>Unknown keys, bad values and bones the model does not have are logged as warnings, never thrown. A part in a sidecar replaces the same part in the model file whole; the rest stay.</p>
+
+<h2 id="springs">Spring bones</h2>
+<pre><code>{
+  "bones": {
+    "pouchL": { "preset": "jiggle-soft", "frequency": 1.7, "damping": 0.24, "length": 0.15,
+               "limit": { "x": [-20, 20], "y": [-20, 20], "z": [-20, 20] } },
+    "belly": { "preset": "jiggle-firm", "translate": true, "maxTranslate": 1.5, "weight": 0.8 }
+  }
+}</code></pre>
+<table>
+	<tr><th><code>preset</code></th><td><code>jiggle-soft</code>, <code>jiggle-firm</code>, <code>hair</code>, <code>tail</code>, <code>ear</code>, <code>soft-bone</code>. Starting values; any key beside it overrides. <code>jiggle-soft</code> and <code>jiggle-firm</code> only rotate the bone about its pivot and nothing presses them. <code>soft-bone</code> is a rotating jiggle that is also pressed by other bodies (<code>other</code>, <code>players</code>, <code>mobs</code>, <code>body</code>) and flattens when pressed (<code>squish</code> 0.3); it does not slide the bone (<code>translate</code> is off, as sliding lifts a rigid part off its parent), which a bone can still turn on with <code>"translate": true</code>.</td></tr>
+	<tr><th><code>frequency</code>, <code>damping</code></th><td>How fast it wobbles (hertz, 1.5 to 2.5 for jiggle) and the damping ratio (0 rings forever, 1 returns without overshoot, 0.15 to 0.35 for jiggle).</td></tr>
+	<tr><th><code>inertia</code></th><td>0 to 1: how much of the entity's own motion reaches the bone.</td></tr>
+	<tr><th><code>gravity</code></th><td>Blocks per second squared: 0 for jiggle, about 9.8 for hair.</td></tr>
+	<tr><th><code>tip</code>, <code>length</code></th><td>The lever: the direction from the pivot to the mass (default straight down) and its length in blocks. A shorter lever turns the same push into a bigger angle.</td></tr>
+	<tr><th><code>rotate</code>, <code>translate</code></th><td>What the springs drive. Rotation is the default.</td></tr>
+	<tr><th><code>limit</code>, <code>maxTranslate</code></th><td>Most rotation per axis in degrees, most translation in model units.</td></tr>
+	<tr><th><code>weight</code></th><td>0 to 1: how much of the physics reaches the pose.</td></tr>
+	<tr><th><code>collidesWith</code>, <code>radius</code>, <code>squish</code></th><td>The layers it is pressed by, its size for collision (blocks) and how much it flattens (0 to 1). The <code>soft-bone</code> preset presses by default.</td></tr>
+</table>
+
+<h2 id="chains">Chains</h2>
+<pre><code>{ "chains": { "ponytail": { "bones": ["hair1", "hair2", "hair3"], "preset": "hair", "tipLength": 0.25, "maxAngle": 50 } } }</code></pre>
+<p>List the bones from the root down; each must be the child of the one before. Keys: <code>preset</code> (<code>hair</code>, <code>tail</code>, <code>ear</code>), <code>frequency</code>, <code>damping</code>, <code>inertia</code> (1 lags the entity fully), <code>gravity</code>, <code>radius</code>, <code>maxAngle</code> (most a segment may bend from its animated direction, degrees), <code>tipLength</code>, <code>friction</code>, <code>weight</code>, <code>collidesWith</code> (default <code>["body", "world"]</code>).</p>
+
+<h2 id="colliders">Colliders, and what a part bumps into</h2>
+<p>A collider is a sphere, capsule or box on a bone, positions relative to the bone's pivot in model units. A part never ends a step inside a shape it collides with. A shape has a <code>layer</code> and a part lists the layers it feels in <code>collidesWith</code>:</p>
+<table>
+	<tr><th><code>body</code></th><td>The model's own shapes.</td></tr>
+	<tr><th><code>world</code></th><td>Blocks, by their real collision boxes (stairs, slabs, fences), with friction.</td></tr>
+	<tr><th><code>other</code></th><td>Another Strut model's <code>body</code> shapes.</td></tr>
+	<tr><th><code>players</code>, <code>mobs</code></th><td>A player's hitbox, any other living entity's hitbox.</td></tr>
+	<tr><th><code>limb</code></th><td>Shapes on arms and legs, for other models' parts to bump into.</td></tr>
+</table>
+<pre><code>{ "colliders": [
+    { "bone": "head", "shape": "sphere", "center": [0, 8, 0], "radius": 5 },
+    { "bone": "torso", "shape": "capsule", "from": [0, 0, 0], "to": [0, 12, 0], "radius": 4, "layer": "body" },
+    { "bone": "torso", "shape": "box", "center": [0, 6, 0], "size": [8, 12, 4], "rotation": [0, 0, 10] } ] }</code></pre>
+<p><strong>Made shapes.</strong> A part that lists <code>body</code> and has no authored shapes on a bone gets shapes made from the model itself: a box per cube for a bone with a few cubes, one low-poly capsule or box for a detailed bone or a mesh. <code>"autoColliders": {"maxCubes": 8, "bones": {"hair": "off"}}</code> tunes it (a bone can be <code>auto</code>, <code>exact</code>, <code>simple</code> or <code>off</code>); <code>false</code> turns it off. A part ignores made shapes on its own bone, its parents and children, and any shape it already overlaps at rest.</p>
+<p><strong>Allow and deny lists.</strong> <code>"collideBones": ["torso"]</code> (only these of its own model's bones) or <code>"ignoreBones": ["head", "hair*"]</code> (all but these) on a spring, chain, cloth or flesh. Names may start or end with <code>*</code>.</p>
+
+<h2 id="cloth">Cloth</h2>
+<p>The vertices of a mesh on a bone, welded into particles (a seam is stitched). Edges keep their length, a bend constraint across every fold resists crumpling, an edge that a fast-moving waistband stretches is brought back, and the particles are pushed out of shapes, blocks and other bodies.</p>
+<pre><code>{ "cloth": { "skirt": { "bone": "hip", "preset": "cloth", "pinHeight": 0.1 } } }</code></pre>
+<table>
+	<tr><th><code>bone</code></th><td>Required. The bone whose mesh is the cloth. <code>mesh</code> picks one of its meshes by order (default all).</td></tr>
+	<tr><th><code>preset</code></th><td><code>cloth</code>, <code>cloth-silk</code>, <code>cloth-stiff</code>.</td></tr>
+	<tr><th><code>stiffness</code>, <code>bend</code></th><td>0 to 1: how firmly edges keep their length; how much a fold resists (0 silk, 1 card).</td></tr>
+	<tr><th><code>pinHeight</code></th><td>The share of the mesh height, from the top, sewn to the bone (a waistband). 0 sews nothing.</td></tr>
+	<tr><th><code>anchor</code></th><td>How firmly the free cloth is pulled toward the animated shape, per second. 0 lets it hang free.</td></tr>
+	<tr><th><code>damping</code>, <code>inertia</code>, <code>gravity</code>, <code>radius</code>, <code>friction</code>, <code>weight</code>, <code>iterations</code></th><td>As for chains. <code>inertia</code> defaults to 0.6 (a skirt is dragged along by the body).</td></tr>
+	<tr><th><code>maxParticles</code></th><td>Default 600. A mesh with more welded vertices is left as modelled and the log says so: use a lower-poly mesh for the cloth.</td></tr>
+	<tr><th><code>collidesWith</code></th><td>Default <code>["body", "world"]</code>.</td></tr>
+</table>
+
+<h2 id="flesh">Flesh and jelly</h2>
+<pre><code>{ "flesh": { "pouchL": { "bone": "pouchL", "preset": "flesh-soft", "softCenter": [-0.2, 1.1, -0.35], "softRadius": 0.32, "carry": ["tipL"] } } }</code></pre>
+<p>Presets <code>flesh-soft</code>, <code>flesh-firm</code> and <code>jelly</code>. The keys are cloth's, with different defaults (pulled back firmly, almost no gravity, pressed by other bodies, players and mobs, nothing sewn on), plus:</p>
+<table>
+	<tr><th><code>volume</code></th><td>0 to 1: how much a closed mesh keeps its volume, so it bulges where pressed in. Open meshes have no volume.</td></tr>
+	<tr><th><code>softCenter</code>, <code>softRadius</code></th><td>Soft inside the radius (blocks, in the mesh's own space), blending to sewn on (exactly as animated) outside it. This is how only the belly is soft while the ribs stay put.</td></tr>
+	<tr><th><code>carry</code></th><td>Other bones whose meshes ride on this one as a single rigid piece: a tip on a pouch. They follow the particles around them, keep their own shape, and turn with the surface. A mesh over both sides at once (armour) cannot be carried by one side yet.</td></tr>
+</table>
+<p><strong>One mesh, several parts.</strong> A mesh that merges separate parts (two pouches in one mesh) works: the parts are told apart by which vertices share a face, and each keeps its own volume around its own middle. Put the soft zone and sewn-on top so they cover every part you want soft.</p>
+<p>Use either springs or flesh on a bone, not both: both would move it.</p>
+<p><strong>Limits.</strong> Meshes bound to an armature, or turned on their own pivot, are not simulated yet and are drawn as modelled. There is no cloth-against-cloth collision. A model with cloth or flesh is drawn by the GPU like any other: the vertex offsets go in one buffer the group's draws read.</p>
+
+<h2 id="ragdoll">Ragdoll</h2>
+<pre><code>{ "ragdoll": { "bones": ["upperBody", "torso", "head", "armL", "lowerArmL"], "parents": { "legL": "upperBody" } } }</code></pre>
+<p>One joint per named bone; keys <code>radius</code>, <code>gravity</code>, <code>damping</code>, <code>friction</code>, <code>minJointAngle</code>, <code>tips</code>. Blocks hold it up, its limbs keep their length and its joints do not fold through themselves. From code, below.</p>
+
+<h2 id="code">From code (client side)</h2>
+<pre><code>StrutPhysics.of(creature).firmness(0.7f);                 // whole model: softer below 1, firmer above
+StrutPhysics.of(creature).weight("pouchL", 0f);            // hold one part still; 1 releases it
+StrutPhysics.of(creature).impulse("belly", 0, -2, 0);     // a kick, blocks per second
+StrutPhysics.of(creature).wind(1f, 0f, 0f);               // a steady push
+StrutPhysics.of(creature).enabled(false);                 // exactly the animation
+StrutPhysics.of(creature).ragdoll(0f);                    // let the body go; 0 limp, 1 exactly the animation
+StrutPhysics.of(creature).ragdollRecover(1.2f);           // the muscle returns, the body stands
+StrutPhysics.of(creature).ragdollHit("torso", x, y, z);   // a shove
+StrutPhysics.of(creature).ragdollOff();                   // fade out at once</code></pre>
+<p>An animation clip can kick a part on every viewer: <code>"strut_physics:impulse": { "bone": "belly", "impulse": [0, -2, 0] }</code>.</p>
+
+<h2 id="blockbench">Authoring in Blockbench</h2>
+<p>Choose the <strong>Physics</strong> mode. Pick a bone in the panel's own list and make it a <strong>Spring</strong>, a <strong>Chain</strong>, or, if it has a mesh, <strong>Cloth</strong> or <strong>Flesh</strong>. A look sets sensible numbers; sliders refine them. <strong>Simulate</strong> moves the real model through a scripted motion or one of its animations with the same physics as the game (a TypeScript twin of the solvers, held to the Java ones by a recorded test), and draws colliders and the simulated cloth and flesh over it. Test shapes (ball, block, pole, wall) exist only on that screen. <strong>Collision shapes</strong> tags each bone's made shape and lets you fit your own with sliders. Everything is undoable. <strong>Tools, Physics as JSON (advanced)</strong> edits the text.</p>
+<p>For cloth and flesh the preview hides the original mesh while it runs and draws the simulated one in a single plain colour, without its texture. A flesh's soft zone is set with a radius and a centre, or <em>Zone from the mesh</em>.</p>
+
+<h2 id="options">Options, quality and cost</h2>
+<p>Options live in <code>config/strut-physics.json</code>, a plain screen (the tool's Settings button) and, when Cloth Config is installed, a Cloth Config screen through Mod Menu. The master switch, collision with blocks, spring bones against blocks, cloth, other models, players, the range (models farther from the camera are drawn as animated) and the quality.</p>
+<table>
+	<tr><th>Low</th><td>Constraints relaxed half as often, fewer steps to catch up (3), at most 256 block shapes near a part, range scaled to 0.6.</td></tr>
+	<tr><th>Medium</th><td>The default.</td></tr>
+	<tr><th>High</th><td>Half as many relaxation passes again, up to 1,024 block shapes.</td></tr>
+</table>
+<p>Whatever the level, a per-frame budget (1.5, 3 and 6 ms) keeps a crowd from taking the frame: when the instances are more than the budget pays for, each takes its turn every few frames (at most every six; the turns are spread over the frames) and shows its last result in between, which costs nothing, and the <strong>F9</strong> line says how many are waiting and how often they get their turn. One instance, or a few, never wait. A thrown ragdoll reads the blocks around itself in a volume it keeps until its joints leave it, and every solver tests only the shapes near its particles.</p>
+
+<h2 id="commands">Commands</h2>
+<p><code>/strutphysics</code> : <code>on|off</code>, <code>debug on|off</code>, <code>info</code>, <code>impulse &lt;bone&gt; x y z</code>, <code>distance &lt;blocks&gt;</code>, <code>quality low|medium|high</code>, <code>collide others|players|springs|cloth &lt;true|false&gt;</code>, <code>ragdoll limp|weak|stand|off</code>, <code>reset</code>, <code>tool</code>, <code>test &lt;scenario&gt;</code>.</p>
+
+<h2 id="testing">Testing it in game</h2>
+<p><code>/strutphysics tool</code> frees the cursor: left-drag a yellow dot to hold a chain particle, a spring mass, a cloth particle or a ragdoll joint; right-drag an entity to slide it (shift lifts it); scenario buttons load a ready-made setup for Strut's test dummy and say what to do and what you should see. The scenarios are <code>springs</code>, <code>chains</code>, <code>colliders</code>, <code>world</code>, <code>bodies</code>, <code>springworld</code>, <code>selfcollide</code>, <code>ragdoll</code>, <code>cloth</code> (a dress is put on the dummy), and <code>flesh</code> (two jelly balls). Every physics system ships one, and a test enforces it.</p>
+
+<h2 id="water">Water and lava</h2>
+<p>Chains, cloth, the ragdoll and spring bones react to the game's own liquids. A part that is in water floats a little (gravity is more than cancelled, so hair drifts up), is slowed, and is carried by a current; lava does the same more heavily. The liquid is read once a frame as the column of it at the entity, so a part reaching sideways out of that column is judged by the column's surface. It needs no setup in a model's physics file. It has its own switch: <code>/strutphysics water &lt;on|off&gt;</code>, the options screen, or the <code>water</code> key of the options file. This is separate from the thick liquid below.</p>
+
+<h2 id="limits">Known limits</h2>
+<ul>
+	<li>Spring bones are not swept against blocks (their mass moves a lever's length at most); chains, cloth and the ragdoll are.</li>
+	<li>The ragdoll is visual: it does not collide with other entities and has no balance controller.</li>
+	<li>Cloth and flesh: no armature-bound meshes, no cloth self collision, no vertex painting or cage for dense meshes; pins come from <code>pinHeight</code> and the soft zone.</li>
+	<li>Whipping a body at about 12 blocks a second stretches a skirt while shapes sweep through it; it recovers when the motion stops.</li>
+	<li>The cloth and flesh draw on the GPU, in the world, in screens and under a shader pack: each moved corner is an offset read from one buffer the instances of a group share, so a crowd of dummies in skirts is still one instanced call. The simulation hands the GPU one offset and one change of shading for each welded particle (a few hundred numbers for a pouch), and a mesh that rides on it (a tip) one rigid motion; the GPU gives them to the corners itself. The buffer is uploaded each frame for the meshes that move only.</li>
+</ul>
+
+</main>
+</div>
+</body>
+</html>

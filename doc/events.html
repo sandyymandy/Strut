@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Events - Strut docs</title>
+<link rel="stylesheet" href="assets/style.css">
+<script src="assets/docs.js" defer></script>
+</head>
+<body>
+<div class="layout">
+<main>
+<h1>Events</h1>
+<p class="lead">Run code when an animation reaches a frame, on the server or on clients, once and only once.</p>
+
+<h2 id="what">What an event is</h2>
+<p>A clip in a <code>.strutanim</code> can carry event keyframes. When playback crosses one, Strut calls the handler for that event's <strong>type</strong>. There are two kinds of thing to run:</p>
+<ul>
+	<li><strong>Gameplay</strong> (a hit lands, a door opens, a scene advances): runs on the <em>server</em>, so it is authoritative and identical for everyone.</li>
+	<li><strong>Cosmetic</strong> (a sound, a particle, a screen fade): runs on each <em>client</em> that can see it.</li>
+</ul>
+
+<h3 id="guarantee">The guarantee</h3>
+<p>For the server, each event that playback crosses is delivered <strong>exactly once</strong>, in order, whether the server ticks slowly, a clip is replaced or sped up, or the animation is seeked. Clients get each event at most once, and exactly once unless a network loss forces a guess (a client that missed the message that started a clip may fire a cosmetic event slightly early or late, or twice across a lost start). Gameplay never depends on a client.</p>
+<p>What that means in practice:</p>
+<ul>
+	<li>An event is <em>half-open</em>: it fires when the playhead moves past it, so it is never fired twice at a boundary and never skipped between two ticks.</li>
+	<li>A slow server tick that crosses several events delivers all of them, in order, with their <em>exact</em> game times.</li>
+	<li>Changing the rate mid-clip, replacing the clip, or seeking does not lose or repeat events.</li>
+	<li>Looping clips fire their events once per lap. Built-in <code>strut:loop</code> and <code>strut:end</code> events mark the lap and the end.</li>
+	<li>A client that joins or reconnects mid-clip does not replay the past.</li>
+</ul>
+
+<h2 id="authoring">Authoring events in Blockbench</h2>
+<p>An event keyframe has three channels:</p>
+<table>
+	<tr><th>Channel</th><th>What goes in it</th></tr>
+	<tr><td>Sound</td><td>A sound id (<code>mymod:creature.cry</code>), or a bare <em>binding key</em> (see <a href="#bindings">bindings</a>). Plays on clients.</td></tr>
+	<tr><td>Particle</td><td>A particle effect, played on clients.</td></tr>
+	<tr><td>Custom instructions</td><td>One typed event per line. This is where gameplay events go.</td></tr>
+</table>
+
+<h3 id="lines">The instruction line</h3>
+<pre><code>mymod:inflate 2.5           a namespaced type id, then its payload text
+mymod:fade_to_black          a type with no payload
+swap_end                  a bare word: shorthand for strut:marker swap_end
+[server] mymod:strike        modifiers in square brackets, before the type
+[both, reverse] swap      several modifiers, separated by commas or spaces</code></pre>
+<p>One keyframe may hold several lines; they fire in line order at that keyframe's time. The optional bracket at the very start sets how <em>that line</em> is delivered:</p>
+<table>
+	<tr><th>Modifier</th><th>Effect</th></tr>
+	<tr><td><code>server</code>, <code>client</code>, <code>both</code></td><td>Where it runs, instead of the type's default. At most one.</td></tr>
+	<tr><td><code>reverse</code></td><td>Also fire when playback crosses it backwards (a seek back, a negative rate). The default is to skip.</td></tr>
+</table>
+<p>A bare word is a <em>marker</em>: a named point that any code can listen for. Markers are lower-cased, so <code>becomeBare</code> and <code>becomebare</code> are the same marker.</p>
+
+<h2 id="builtin">Built-in event types</h2>
+<table>
+	<tr><th>Type</th><th>Payload</th><th>Runs on</th></tr>
+	<tr><td><code>strut:marker</code></td><td>A name</td><td>Both</td></tr>
+	<tr><td><code>strut:sound</code></td><td>A sound id or binding key</td><td>Client</td></tr>
+	<tr><td><code>strut:particle</code></td><td>A particle spec</td><td>Client</td></tr>
+	<tr><td><code>strut:loop</code></td><td>The lap number</td><td>Both</td></tr>
+	<tr><td><code>strut:end</code></td><td>None</td><td>Both</td></tr>
+</table>
+
+<h2 id="listening">Listening for a marker</h2>
+<p>The lightest way to react to a clip is to listen for a marker by name:</p>
+<pre class="sample" data-sample="marker-listener"><code>StrutEvents.onServerMarker("swap_end", context -&gt; {
+	Entity entity = context.entity();
+	// runs once per crossing of the marker, on the server, whatever the lag
+});</code></pre>
+<p>For the client, <code>StrutEvents.onClientMarker</code> is the counterpart. Both take the marker name case-insensitively. To listen to a whole <em>type</em> rather than one marker, use <code>StrutEvents.onServer(typeId, listener)</code> and <code>onClient</code>.</p>
+
+<h3 id="on-entity">On the entity itself</h3>
+<p>A <code>StrutEntity</code> is offered its own events through two overridable methods, so a handler can use the entity's fields directly:</p>
+<pre class="sample" data-sample="entity-event-hooks"><code>public class HeroEvents extends PathAwareEntity implements StrutEntity {
+	public HeroEvents(EntityType&lt;? extends HeroEvents&gt; type, World world) {
+		super(type, world);
+	}
+
+	@Override
+	public void onAnimationEvent(EventContext context) {
+		if (context.isMarker("footstep"))
+			playSound(net.minecraft.sound.SoundEvents.BLOCK_GRASS_STEP, 0.5f, 1f);
+	}
+
+	@Override
+	public List&lt;Identifier&gt; getEventBindings() {
+		return List.of(Identifier.of("mymod", "creatures/ava"), Identifier.of("mymod", "creatures/default"));
+	}
+}</code></pre>
+
+<h2 id="types">Your own event types</h2>
+<p>A type is a name, the shape of its payload on the wire and in a clip, where it runs by default, and its handlers. One <code>builder</code> call per event your mod owns replaces a hand-written string parser and a trigger packet:</p>
+<pre class="sample" data-sample="event-type"><code>return StrutEventTypes.register(StrutEventType
+		.builder(Identifier.of("mymod", "strike"), PacketCodecs.FLOAT.cast())
+		.authority(EventAuthority.SERVER)
+		.parser(Float::parseFloat)
+		.serverHandler((context, strength) -&gt; {
+			// context.entity(), context.exactGameTime(), context.random() ... and the parsed payload
+		})
+		.build());</code></pre>
+<p>Now a clip line <code>mymod:strike 2.5</code> parses <code>2.5</code> with your parser and calls the handler. Register types while your mod initialises: types are frozen before the first world loads, and registering late is an error, so a clip can never resolve against half the set.</p>
+<ul>
+	<li><code>authority(...)</code>: <code>SERVER</code>, <code>CLIENT</code> or <code>BOTH</code>. A clip line can override it with a modifier.</li>
+	<li><code>serverHandler</code> receives an <code>EventContext</code>: the entity, the playback, the loop, the exact game time, and a deterministic random source. <code>clientHandler</code> receives the client equivalent.</li>
+	<li><code>noPayload(value)</code> declares a type that takes no payload text.</li>
+	<li>Payload codecs use the game's <code>PacketByteBuf</code>. A payload that refers to a registry entry should carry its id and resolve it when handled, which also makes it safe on a client that lacks the entry.</li>
+</ul>
+
+<h3 id="random">Deterministic random</h3>
+<p><code>context.random()</code> returns the same sequence on the server and on every client for one occurrence. A "random line from this set" chosen in an event handler is therefore the same everywhere, without sending the choice.</p>
+
+<h2 id="bindings">Bindings: sounds without code</h2>
+<p>The sound channel can carry a <em>binding key</em> instead of a sound id. A binding set maps keys to what to play, per character or per situation, in a resource-pack file <code>assets/&lt;ns&gt;/strut/event_bindings/&lt;path&gt;.json</code> (set id <code>&lt;ns&gt;:&lt;path&gt;</code>):</p>
+<pre><code>{
+	"pound":    { "sounds": ["mymod:misc.impact"] },
+	"thumpmsg1": { "sounds": ["mymod:thump"],
+	              "random_sounds": ["mymod:ahh", { "sound": "mymod:mmm", "weight": 2 }, { "none": true, "weight": 3 }] }
+}</code></pre>
+<ul>
+	<li><code>sounds</code> all play; <code>random_sounds</code> picks one, with optional weights. <code>{"none": true}</code> is an explicit silence.</li>
+	<li>An entity names its sets, in fallback order, by overriding <code>getEventBindings()</code>. For each key the <em>first set that defines it</em> supplies the whole binding.</li>
+	<li>Mods can add actions beyond sounds with <code>EventBindings.registerAction</code>.</li>
+	<li>A key no set defines is counted, and shown on the F9 overlay as <em>unbound keys</em>, so a typo is visible.</li>
+</ul>
+
+<h2 id="timelines">Where the server gets a clip's events</h2>
+<p>The server does not need the model, only the clip's <em>timeline</em>: its length, loop mode and event keyframes. It reads them, in priority order, from:</p>
+<ol>
+	<li>Timelines your mod registers in code (<code>ClipTimelines</code>).</li>
+	<li>Sources you add (<code>addSource</code>), and animations delivered by <a href="asset-sync.html">asset sync</a> (<code>data/&lt;ns&gt;/asset_sync/strut/animations/</code>).</li>
+	<li>Data packs: <code>data/&lt;ns&gt;/strut/animations/**.strutanim</code>.</li>
+	<li>Animations inside mod jars.</li>
+</ol>
+<p>The client uses the clip it loaded from its own resources. Both derive a content hash, so a mismatch between the two copies can be detected.</p>
+<p>To fail loudly at load instead of silently at play time, declare the markers your gameplay needs. A clip that lacks one is reported:</p>
+<pre><code>StrutEvents.requireMarkers("bia_scene", "strike", "finish");</code></pre>
+
+<h2 id="limits">Limits worth knowing</h2>
+<ul>
+	<li>A sweep that would cross more than 256 occurrences in one tick is capped, counted (F9 <em>capped sweeps</em>) and continued next tick.</li>
+	<li>A client-side event that arrives more than ten ticks late is dropped rather than fired out of context.</li>
+	<li>Events run from the <em>game tick</em>, never from rendering, so a culled or off-screen entity still plays its events.</li>
+	<li>Events are read from binary <code>.strutanim</code> files only.</li>
+</ul>
+
+<h2 id="debug">Seeing events run</h2>
+<p><code>/strut events stats</code> shows cumulative counts. <code>/strut events trace &lt;entity&gt;</code> prints a line for every server event delivered on that entity: type, payload, sequence, loop and exact game time. The F9 overlay shows <em>events fired: server N / client N</em>. See <a href="debugging.html">Commands and debugging</a>.</p>
+
+<footer>Strut documentation.</footer>
+</main>
+</div>
+</body>
+</html>

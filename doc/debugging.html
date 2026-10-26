@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Commands and debugging - Strut docs</title>
+<link rel="stylesheet" href="assets/style.css">
+<script src="assets/docs.js" defer></script>
+</head>
+<body>
+<div class="layout">
+<main>
+<h1>Commands and debugging</h1>
+<p class="lead">How to see Strut working, and how to tell "did not run" from "ran and did nothing".</p>
+
+<p>Every command needs operator permission level 2. They work on a dedicated server and in single player.</p>
+
+<h2 id="events">/strut events</h2>
+<table>
+	<tr><th>Command</th><th>Does</th></tr>
+	<tr><td><code>/strut events stats</code></td><td>Cumulative counts since launch: server and client events delivered, unbound sound keys, capped sweeps, binding sets loaded, entities being traced.</td></tr>
+	<tr><td><code>/strut events trace &lt;entity&gt; [on|off]</code></td><td>A chat line for every server event delivered on that entity: type, payload, playback sequence, loop and exact game time. With no <code>on</code> or <code>off</code> it toggles. Server-side events only; the client's are on the F9 overlay.</td></tr>
+</table>
+<p>A working event and one that silently never ran look identical from outside, so trace is the way to check a new clip.</p>
+
+<h2 id="assets">/strut assets</h2>
+<table>
+	<tr><th>Command</th><th>Does</th></tr>
+	<tr><td><code>/strut assets status</code></td><td>What the server offers (files, size, manifest hash, whether assets are required), the counters, each player's sync in progress, and files skipped at the last reload with the reason.</td></tr>
+	<tr><td><code>/strut assets list</code></td><td>The first 40 offered files with size and a short hash.</td></tr>
+</table>
+
+<h2 id="f9">F9</h2>
+<p>The render overlay: see <a href="rendering.html#f9">Rendering and performance</a> for every line.</p>
+
+<h2 id="log">The log</h2>
+<p>Strut's log lines carry a prefix so they can be found:</p>
+<table>
+	<tr><th>Prefix</th><th>From</th></tr>
+	<tr><td><code>[Strut events]</code></td><td>Clip timelines, marker requirements, and event problems (an unknown type, an unreadable clip).</td></tr>
+	<tr><td><code>[Strut asset sync]</code></td><td>What is offered, each player's sync result, files skipped and why, and client-side problems.</td></tr>
+	<tr><td><code>[Strut shadow]</code></td><td>The GL state found by the first few Iris shadow flushes.</td></tr>
+</table>
+
+<h2 id="checklist">If something does not work</h2>
+<ul>
+	<li><strong>Nothing animates.</strong> Is the server playing anything? <code>ServerAnimationStates.forEntity(entity, false).play(...)</code> must run on the server. Check the clip name matches one in the <code>.strutanim</code>.</li>
+	<li><strong>An entity is invisible.</strong> Check the model, texture and animation paths against the <a href="models.html#folders">convention</a>.</li>
+	<li><strong>An event never fires.</strong> Trace it. If nothing appears, the server has no timeline for that clip: see <a href="events.html#timelines">where the server gets a clip's events</a>. If a line appears but your code does not, check the type is registered and the listener's marker name.</li>
+	<li><strong>A sound never plays.</strong> Look at <em>unbound keys</em> on F9: a binding key nobody defined is counted there.</li>
+	<li><strong>Server assets are missing.</strong> <code>/strut assets status</code>, then the player's F9 <em>asset sync</em> line.</li>
+	<li><strong>A shadow is missing under shaders.</strong> Read the F9 <em>shadow pass</em> funnel: see <a href="rendering.html#shadow-log">Rendering and performance</a>.</li>
+</ul>
+
+<footer>Strut documentation.</footer>
+</main>
+</div>
+</body>
+</html>

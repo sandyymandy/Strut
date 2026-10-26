@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Models and files - Strut docs</title>
+<link rel="stylesheet" href="assets/style.css">
+<script src="assets/docs.js" defer></script>
+</head>
+<body>
+<div class="layout">
+<main>
+<h1>Models and files</h1>
+<p class="lead">The formats, where each file lives, and how to point Strut somewhere else.</p>
+
+<h2 id="formats">The formats</h2>
+<table>
+	<tr><th>Extension</th><th>Holds</th></tr>
+	<tr><td><code>.strutmodel</code></td><td>Geometry: cubes, free-form meshes, bone groups and armatures with skinning weights.</td></tr>
+	<tr><td><code>.strutanim</code></td><td>Animation clips: keyframes for bones and armature bones, plus event keyframes (sounds, particles, custom instructions).</td></tr>
+</table>
+<p>Both are compact binary files. The Blockbench plugin in this repository (<code>plugin/strut_toolkit</code>) reads and writes them directly, so there is no separate export step. The formats are versioned, and a reader refuses a file it does not understand instead of guessing.</p>
+
+<h3 id="legacy">Legacy JSON</h3>
+<p>Bedrock-style <code>.geo.json</code> and <code>.animation.json</code> files can still be loaded when you name them explicitly. New features are built for the binary formats only: the folder conventions, typed <a href="events.html">events</a> and server-side timelines all read <code>.strutanim</code>.</p>
+
+<h2 id="folders">Folder conventions</h2>
+<p>For a registry id <code>namespace:path</code> and a kind, Strut looks for:</p>
+<table>
+	<tr><th>Kind</th><th>Model</th><th>Texture</th><th>Animations</th></tr>
+	<tr><td>entity</td><td><code>strut/models/entity/path.strutmodel</code></td><td><code>textures/entity/path.png</code></td><td><code>strut/animations/entity/path.strutanim</code></td></tr>
+	<tr><td>item</td><td><code>strut/models/item/path.strutmodel</code></td><td><code>textures/item/path.png</code></td><td><code>strut/animations/item/path.strutanim</code></td></tr>
+	<tr><td>block</td><td><code>strut/models/block/path.strutmodel</code></td><td><code>textures/block/path.png</code></td><td><code>strut/animations/block/path.strutanim</code></td></tr>
+	<tr><td>armor</td><td><code>strut/models/armor/path.strutmodel</code></td><td><code>textures/armor/path.png</code></td><td><code>strut/animations/armor/path.strutanim</code></td></tr>
+</table>
+<p>All under <code>assets/namespace/</code>. The model folder is <code>strut/models/</code> rather than <code>models/</code> because <code>models/</code> is where vanilla keeps its own json models.</p>
+
+<h2 id="choosing">Choosing files</h2>
+<p>You can ask for a conventional model directly, and change one part of it:</p>
+<table>
+	<tr><th>Call</th><th>Gives</th></tr>
+	<tr><td><code>StrutModel.entity(id)</code></td><td>The entity convention above.</td></tr>
+	<tr><td><code>StrutModel.item(id)</code></td><td>The item convention.</td></tr>
+	<tr><td><code>StrutModel.block(id)</code></td><td>The block convention.</td></tr>
+	<tr><td><code>StrutModel.armor(id)</code></td><td>The armor convention.</td></tr>
+	<tr><td><code>.withAltModel(id)</code>, <code>.withAltTexture(id)</code>, <code>.withAltAnimations(id)</code></td><td>The same, with that one part taken from another id (with the same folder convention applied to it).</td></tr>
+</table>
+<p>When the files do not follow the convention, build the model from ids or from functions of the animatable. The functions run every time the game asks, so the model can depend on the entity's state (a dressed and an undressed model, for instance):</p>
+<pre class="sample" data-sample="model-builder"><code>return StrutModel.&lt;HeroEntity&gt;builder()
+		.model(creature -&gt; Identifier.of("mymod", "strut/models/dressed/" + creature.getName().getString() + ".strutmodel"))
+		.texture(creature -&gt; Identifier.of("mymod", "textures/entities/" + creature.getName().getString() + ".png"))
+		.animation(Identifier.of("mymod", "strut/animations/base/creature.strutanim"))
+		.build();</code></pre>
+<p>Anything the builder does not cover (turning a head bone, custom bone handling, animation fallbacks) is still a subclass of <code>StrutModel</code>: override <code>getModelResource</code>, <code>getTextureResource</code> and <code>getAnimationResource</code>, plus whatever else you need.</p>
+
+<h2 id="loading">How loading works</h2>
+<ul>
+	<li>Models and animations are loaded when resources load, from every resource pack, in pack order.</li>
+	<li>Assets delivered by <a href="asset-sync.html">asset sync</a> appear as one more resource pack on top, so they load through the same path.</li>
+</ul>
+
+<footer>Strut documentation.</footer>
+</main>
+</div>
+</body>
+</html>

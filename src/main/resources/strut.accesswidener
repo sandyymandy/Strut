@@ -1,0 +1,42 @@
+accessWidener	v1	named
+accessible	method	net/minecraft/client/render/RenderLayer	of	(Ljava/lang/String;Lnet/minecraft/client/render/VertexFormat;Lnet/minecraft/client/render/VertexFormat$DrawMode;IZZLnet/minecraft/client/render/RenderLayer$MultiPhaseParameters;)Lnet/minecraft/client/render/RenderLayer$MultiPhase;
+accessible	method	net/minecraft/client/render/RenderLayer	of	(Ljava/lang/String;Lnet/minecraft/client/render/VertexFormat;Lnet/minecraft/client/render/VertexFormat$DrawMode;ILnet/minecraft/client/render/RenderLayer$MultiPhaseParameters;)Lnet/minecraft/client/render/RenderLayer$MultiPhase;
+accessible	field	net/minecraft/client/render/entity/EntityRenderDispatcher	renderers	Ljava/util/Map;
+accessible	class	net/minecraft/client/render/RenderPhase$ShaderProgram
+accessible	class	net/minecraft/client/render/RenderPhase$Texture
+accessible	class	net/minecraft/client/render/RenderPhase$Transparency
+accessible	class	net/minecraft/client/render/RenderPhase$WriteMaskState
+accessible	class	net/minecraft/client/render/RenderPhase$Overlay
+accessible	class	net/minecraft/client/render/RenderLayer$MultiPhaseParameters
+
+accessible	field	net/minecraft/client/model/ModelPart	cuboids	Ljava/util/List;
+accessible	field	net/minecraft/client/render/entity/model/AnimalModel	headScaled	Z
+accessible	field	net/minecraft/client/render/entity/model/AnimalModel	childHeadYOffset	F
+accessible	field	net/minecraft/client/render/entity/model/AnimalModel	childHeadZOffset	F
+accessible	field	net/minecraft/client/render/entity/model/AnimalModel	invertedChildHeadScale	F
+accessible	field	net/minecraft/client/render/entity/model/AnimalModel	invertedChildBodyScale	F
+accessible	field	net/minecraft/client/render/entity/model/AnimalModel	childBodyYOffset	F
+
+accessible	field	net/minecraft/client/render/WorldRenderer	bufferBuilders	Lnet/minecraft/client/render/BufferBuilderStorage;
+accessible	field	net/minecraft/client/render/BufferBuilder	building	Z
+
+accessible	method	net/minecraft/client/render/WorldRenderer	canDrawEntityOutlines	()Z
+accessible	field	net/minecraft/client/render/item/ItemRenderer	builtinModelItemRenderer	Lnet/minecraft/client/render/item/BuiltinModelItemRenderer;
+
+accessible	field	net/minecraft/component/ComponentMapImpl	copyOnWrite	Z
+
+# TEMP FOR BUFFERBUILDER
+accessible	class	net/minecraft/client/render/OutlineVertexConsumerProvider$OutlineVertexConsumer
+accessible	class	net/minecraft/client/render/VertexConsumers$Dual
+accessible	method	net/minecraft/client/render/OutlineVertexConsumerProvider$OutlineVertexConsumer	<init>	(Lnet/minecraft/client/render/VertexConsumer;I)V
+accessible	field	net/minecraft/client/render/VertexConsumers$Dual	first	Lnet/minecraft/client/render/VertexConsumer;
+accessible	field	net/minecraft/client/render/VertexConsumers$Dual	second	Lnet/minecraft/client/render/VertexConsumer;
+
+# The GPU path binds vanilla's
+# per-frame lighting/overlay/lightmap textures itself, bypassing ShaderProgram's own deferred
+# RenderSystem.setShaderTexture/setupShaderLights mechanism entirely (a raw draw call never goes
+# through ShaderProgram.bind(), the only thing that ever reads that cache) - so it needs the real
+# values these three private fields hold, not a public getter that doesn't exist for any of them
+accessible	field	com/mojang/blaze3d/systems/RenderSystem	shaderLightDirections	[Lorg/joml/Vector3f;
+accessible	field	net/minecraft/client/render/OverlayTexture	texture	Lnet/minecraft/client/texture/NativeImageBackedTexture;
+accessible	field	net/minecraft/client/render/LightmapTextureManager	texture	Lnet/minecraft/client/texture/NativeImageBackedTexture;

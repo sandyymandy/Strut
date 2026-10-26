@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Entities - Strut docs</title>
+<link rel="stylesheet" href="assets/style.css">
+<script src="assets/docs.js" defer></script>
+</head>
+<body>
+<div class="layout">
+<main>
+<h1>Entities</h1>
+<p class="lead">What a Strut entity is, what it does not need to declare, and how its files are found.</p>
+
+<h2 id="class">The class</h2>
+<p>Any entity can be a Strut entity: implement <code>StrutEntity</code>.</p>
+<pre class="sample" data-sample="entity-minimal"><code>public class HeroEntity extends PathAwareEntity implements StrutEntity {
+	public HeroEntity(EntityType&lt;? extends HeroEntity&gt; type, World world) {
+		super(type, world);
+	}
+}</code></pre>
+<p>Everything <code>StrutEntity</code> asks of you has a default:</p>
+<table>
+	<tr><th>Was required</th><th>Now</th></tr>
+	<tr><td>A field holding the animation cache, and its getter</td><td>Held in a slot Strut adds to every entity, created on first use. Declare your own and yours wins.</td></tr>
+	<tr><td><code>getTick</code></td><td>The entity's age in ticks. Override it for a non-ticking entity.</td></tr>
+	<tr><td><code>registerControllers</code></td><td>Optional. When the server plays an animation on a controller name that has none, one is created on the client. Register controllers only to tune one (transition length, triggerable animations) or to animate on the client.</td></tr>
+	<tr><td>A model class, a renderer class, and a registration call</td><td>One line: <code>StrutClient.entity(type)</code>.</td></tr>
+</table>
+
+<h2 id="register">Registering the renderer</h2>
+<p><code>StrutClient</code> is Strut's client entry point. Call these from your own client initialiser, once per entity type.</p>
+<pre class="sample" data-sample="client-entity"><code>StrutClient.entity(AVA);</code></pre>
+<p>This uses the <a href="#convention">convention</a> below. <code>StrutClient.entity</code> has three forms:</p>
+<table>
+	<tr><th>Call</th><th>Use it when</th></tr>
+	<tr><td><code>entity(type)</code></td><td>The files follow the convention.</td></tr>
+	<tr><td><code>entity(type, model)</code></td><td>You need to change which model, texture or animation file is used.</td></tr>
+	<tr><td><code>entity(type, factory)</code></td><td>You want a renderer of your own: a subclass of <code>StrutEntityRenderer</code>, or one with <code>withScale</code> and render layers.</td></tr>
+</table>
+
+<h2 id="convention">The convention</h2>
+<p>An entity type with the registry id <code>namespace:path</code> is rendered from:</p>
+<table>
+	<tr><th>File</th><th>Location</th></tr>
+	<tr><td>Model</td><td><code>assets/namespace/strut/models/entity/path.strutmodel</code> (or <code>assets/namespace/strut/models/entity/path.strutmodel</code>: both folders are read, and a model asks for the id of the file's full path)</td></tr>
+	<tr><td>Texture</td><td><code>assets/namespace/textures/entity/path.png</code></td></tr>
+	<tr><td>Animations</td><td><code>assets/namespace/strut/animations/entity/path.strutanim</code> (or <code>strut/animations/entity/path.strutanim</code>; a data pack's server timelines are read from the same two folders under <code>data/namespace/</code>)</td></tr>
+</table>
+<p>A nested id nests the files: <code>mymod:creatures/ava</code> reads <code>strut/models/entity/creatures/ava.strutmodel</code>.</p>
+
+<h2 id="overrides">Changing what differs</h2>
+<p>Start from the conventional model and replace one part. <code>withAltModel</code>, <code>withAltTexture</code> and <code>withAltAnimations</code> take an id and apply the same folder convention to it, so several entities can share a texture:</p>
+<pre class="sample" data-sample="client-entity-alt-texture"><code>StrutClient.entity(NIA, StrutModel.&lt;HeroEntity&gt;entity(Identifier.of("mymod", "nia")).withAltTexture(shared));</code></pre>
+<p>When the files do not follow the convention at all, build the model from ids, or from functions of the entity so the model can change with its state:</p>
+<pre class="sample" data-sample="model-builder"><code>return StrutModel.&lt;HeroEntity&gt;builder()
+		.model(creature -&gt; Identifier.of("mymod", "strut/models/dressed/" + creature.getName().getString() + ".strutmodel"))
+		.texture(creature -&gt; Identifier.of("mymod", "textures/entities/" + creature.getName().getString() + ".png"))
+		.animation(Identifier.of("mymod", "strut/animations/base/creature.strutanim"))
+		.build();</code></pre>
+<p>The builder refuses to <code>build()</code> unless the model, texture and animation are all set, and names the one that is missing.</p>
+
+<h2 id="renderer">A renderer of your own</h2>
+<p>Pass a factory when you need more than a model, for example a scale:</p>
+<pre class="sample" data-sample="client-entity-factory"><code>StrutClient.entity(AVA, context -&gt; new StrutEntityRenderer&lt;&gt;(context, AVA).withScale(1.2f));</code></pre>
+
+<h2 id="server">Server-driven by default</h2>
+<p>A <code>StrutEntity</code>'s controllers are <strong>server-authoritative</strong>: the server decides what plays, the client only mirrors it. That is what makes late joiners, lag and events reliable. A controller can be opted out to decide locally (<code>AuthorityMode.CLIENT_COSMETIC</code>), which is right for purely visual flourishes. Everything is in <a href="animations.html">Playing animations</a>.</p>
+
+<div class="callout warn">
+<p><strong class="label">Formats.</strong> The convention points at the binary formats. Legacy <code>.geo.json</code> and <code>.animation.json</code> files can still be loaded by naming them explicitly, but nothing new (events, the compact format, the Blockbench plugin) is built for them.</p>
+</div>
+
+<footer>Strut documentation.</footer>
+</main>
+</div>
+<h2 id="model-attachments">Worn models</h2>
+<pre><code>ModelAttachment hat = ClientModelAttachments.set(entity, "hat", modelId, textureId).tint(0xFFFFD700);
+hat.requireBone("head");            // not drawn on a model with no head bone
+ClientModelAttachments.clear(entity, "hat");</code></pre>
+<p>A Strut model can be worn by another Strut-drawn entity (armour, a hat, a cape). It is bound to the wearer by bone name: each bone of the worn model that has the name of one of the wearer's bones is posed exactly as the wearer's is, every frame, so the model follows the wearer's animation, physics, overrides and visibility without being animated itself. Make the worn model on top of the wearer's skeleton (the same bone names, pivots and hierarchy) and keep only the part that is worn. Bones with no match stay at rest and move with their matched parent. A model with no bone in common with the wearer, or without the bone given to <code>requireBone</code>, is not drawn. It is local to the client, drawn by the GPU path in the same batch as the wearer (and in shadows), and has no armature support yet; it is not drawn where the wearer is drawn by the CPU fallback (a menu doll). <code>/strutwear &lt;model&gt; &lt;texture&gt;</code> puts a model on you in red (for example <code>strut:strut/models/entity/test_dummy.strutmodel</code> and <code>strut:textures/entity/test_dummy.png</code>), <code>/strutwear status</code> says why it is or is not drawn, and <code>/strutwear clear</code> takes it off. Only a player drawn by Strut (one with a body) can wear a model.</p>
+
+<h2 id="living-actions">Attacks and item use</h2>
+<p>For any entity that is a <code>LivingEntity</code>, <code>LivingActions.addTo(this, controllers)</code> in <code>registerControllers</code> adds a controller that plays <code>attack0</code>, <code>attack1</code>, ... once for each swing of its hand, turn by turn (or <code>swing</code> if it has no combo), and one that plays <code>use_eat</code>, <code>use_bow</code>, <code>use_block</code>, ... (then <code>use</code>) while it uses an item. A clip the file does not have is skipped, and a swing's clip plays out in full. A second argument gives a prefix for files whose clips are named <code>animation.base.attack0</code>.</p>
+
+</body>
+</html>

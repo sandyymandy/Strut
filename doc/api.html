@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>API reference - Strut docs</title>
+<link rel="stylesheet" href="assets/style.css">
+<script src="assets/docs.js" defer></script>
+</head>
+<body>
+<div class="layout">
+<main>
+<h1>API reference</h1>
+<p class="lead">The guide pages cover what you need day to day. Every public class and method is in the generated Javadoc.</p>
+
+<h2 id="javadoc">The Javadoc</h2>
+<p>The Javadoc is generated from the source, so it is always current, and is not stored in the repository. Build it once:</p>
+<pre><code>./gradlew javadoc
+java tools/CopyApiDocs.java</code></pre>
+<p>That places it in <code>doc/api/</code>, and <a href="api/index.html">the API index</a> opens from there. (The link is dead until you have built it.)</p>
+
+<h2 id="packages">Where things are</h2>
+<table>
+	<tr><th>Package (under <code>com.sandymandy.strut</code>)</th><th>What is in it</th></tr>
+	<tr><td><code>StrutClient</code></td><td>The client-side registration entry point: <code>entity</code>, <code>item</code>, <code>armor</code>, <code>blockEntity</code>.</td></tr>
+	<tr><td><code>animatable</code></td><td>The interfaces you implement: <code>StrutEntity</code>, <code>StrutItem</code>, <code>StrutBlockEntity</code>, <code>StrutReplacedEntity</code>, and the bone overrides and attachments handles.</td></tr>
+	<tr><td><code>animatable.client</code></td><td>Render providers for items and armor.</td></tr>
+	<tr><td><code>animation</code></td><td>Controllers, the animation manager, <code>RawAnimation</code>, <code>PlayState</code>.</td></tr>
+	<tr><td><code>animation.authority</code></td><td>The server-authoritative clock: <code>ServerAnimationStates</code>, <code>AnimationPlayback</code>, <code>AuthorityMode</code>.</td></tr>
+	<tr><td><code>animation.override</code></td><td>Bone override properties and scopes.</td></tr>
+	<tr><td><code>event</code></td><td>Typed events: <code>StrutEvents</code>, <code>StrutEventType</code>, <code>StrutEventTypes</code>, <code>EventContext</code>, and the clip timelines, bindings and dispatchers beneath it.</td></tr>
+	<tr><td><code>model</code></td><td><code>StrutModel</code>, its conventional variants and the builder.</td></tr>
+	<tr><td><code>renderer</code></td><td>The renderers: <code>StrutEntityRenderer</code>, <code>StrutItemRenderer</code>, <code>StrutBlockRenderer</code>, <code>StrutArmorRenderer</code>.</td></tr>
+	<tr><td><code>assetsync</code></td><td>Asset sync: <code>StrutAssetSync</code> for servers, and <code>assetsync.client</code> for the client.</td></tr>
+	<tr><td><code>util</code></td><td><code>StrutUtil</code>, <code>Color</code> and other helpers.</td></tr>
+</table>
+<p>Classes and methods marked <code>@ApiStatus.Internal</code> are not part of the API and can change without notice.</p>
+
+<footer>Strut documentation.</footer>
+</main>
+</div>
+</body>
+</html>

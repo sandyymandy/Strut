@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Items, armor and blocks - Strut docs</title>
+<link rel="stylesheet" href="assets/style.css">
+<script src="assets/docs.js" defer></script>
+</head>
+<body>
+<div class="layout">
+<main>
+<h1>Items, armor and blocks</h1>
+<p class="lead">The same idea as entities: implement an interface, register with one line.</p>
+
+<h2 id="registration">Registration</h2>
+<p>In your client initialiser:</p>
+<pre class="sample" data-sample="client-items"><code>StrutClient.item(STAFF);          // strut/models/item/staff.strutmodel by convention
+StrutClient.armor(OUTFIT);             // strut/models/armor/outfit.strutmodel
+StrutClient.blockEntity(BED);     // strut/models/block/bed.strutmodel</code></pre>
+<p>Each has the same three forms as <code>StrutClient.entity</code>: the convention, a model you supply, or a renderer you build yourself (for items, a supplier of the renderer; for block entities, a renderer factory).</p>
+<table>
+	<tr><th>Kind</th><th>Interface</th><th>Files, by convention</th></tr>
+	<tr><td>Item</td><td><code>StrutItem</code></td><td><code>strut/models/item/&lt;path&gt;.strutmodel</code>, <code>textures/item/&lt;path&gt;.png</code></td></tr>
+	<tr><td>Armor</td><td><code>StrutItem</code></td><td><code>strut/models/armor/&lt;path&gt;.strutmodel</code>, <code>textures/armor/&lt;path&gt;.png</code></td></tr>
+	<tr><td>Block entity</td><td><code>StrutBlockEntity</code></td><td><code>strut/models/block/&lt;path&gt;.strutmodel</code>, <code>textures/block/&lt;path&gt;.png</code></td></tr>
+</table>
+<p>The path comes from the registry id of the item, or of the block entity type.</p>
+
+<h2 id="items">Items</h2>
+<pre class="sample" data-sample="item-class"><code>public class CreaturestaffItem extends Item implements StrutItem {
+	public CreaturestaffItem(Settings settings) {
+		super(settings);
+	}
+}</code></pre>
+<p>That is the whole class. Two things make it render:</p>
+<ol>
+	<li><code>StrutClient.item(...)</code> in your client initialiser.</li>
+	<li>An item model json, <code>assets/&lt;ns&gt;/models/item/&lt;path&gt;.json</code>, whose parent hands drawing to Strut:
+<pre><code>{
+	"parent": "builtin/entity"
+}</code></pre></li>
+</ol>
+<p>You do not register the item for animation syncing: Strut does it as items are added to the registry. (Calling <code>registerSyncedAnimatable</code> yourself is harmless.)</p>
+
+<h3 id="item-animation">Animating an item</h3>
+<p>Items and block entities are animated <strong>on the client</strong>, so they need a controller of your own. The server cannot drive an item stack the way it drives an entity. <code>registerControllers</code> is where you add one:</p>
+<pre class="sample" data-sample="block-entity-class"><code>public class CreatureBedBlockEntity extends BlockEntity implements StrutBlockEntity {
+	public CreatureBedBlockEntity(BlockEntityType&lt;?&gt; type, BlockPos pos, BlockState state) {
+		super(type, pos, state);
+	}
+
+	@Override
+	public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {
+		controllers.add(new AnimationController&lt;&gt;(this, "main",
+				state -&gt; state.setAndContinue(RawAnimation.begin().thenLoop("idle"))));
+	}
+}</code></pre>
+<p>The same <code>registerControllers</code> works on an item. To trigger an animation from the server on an item or block entity, use <code>triggerAnim</code>.</p>
+<p>Override <code>isPerspectiveAware()</code> on an item to animate differently in the hand, the inventory and the world.</p>
+
+<h2 id="alternatives">A model with alternative parts</h2>
+<p>A model that holds parts of which only some are drawn (the halves of a bed, an item that shows one of them) lists the ones it never draws on the model: <code>public Collection&lt;String&gt; hiddenBones(T animatable)</code>. They are hidden, with what is under them, in what is drawn, whatever the animation or a bone override says, for blocks, items and entities alike. A part that changes (by what a stack holds) is hidden in <code>setCustomAnimations</code> instead, with <code>bone.setHidden(true)</code>.</p>
+<h2 id="armor">Armor</h2>
+<p><code>StrutClient.armor(item)</code> renders a worn model from <code>strut/models/armor/...</code>. An armor item normally also calls <code>StrutClient.item(item)</code> for how it looks in the inventory and in the hand; the two are independent.</p>
+
+<h2 id="blocks">Blocks</h2>
+<p>A block that shows a Strut model is a block with a block entity. Make the block's own render type invisible so only the block entity's renderer draws, and register the renderer with <code>StrutClient.blockEntity(type)</code>. A block entity class is shown above.</p>
+
+<h3 id="block-overrides">Changing a block's bones</h3>
+<p>A <code>StrutBlockEntity</code> has <code>overrides()</code>, the same as an entity: hide, move, rotate, scale, tint or re-texture a bone.</p>
+<pre><code>// on the server: every player who can see the block gets it
+blockEntity.overrides().setHidden("lid", true);
+blockEntity.overrides().setColor("cloth", new Color(0xFFCC4444));
+
+// on a client: only that player's own view
+blockEntity.overrides().clear("lid", OverrideProperty.HIDDEN);</code></pre>
+<p>The server's overrides reach a player who is already near the block when they are set, and a player who comes near later when the block loads on their side. They are not saved: a block entity that loads again starts without any, so set them from the block's own state when it loads and when that state changes. They are kept for the block's position and dropped when the block entity is removed or unloaded. See <a href="bones.html">Bones</a> for the properties.</p>
+
+<h2 id="old">The older way still works</h2>
+<p>An item that overrides <code>createStrutRenderer(Consumer&lt;StrutRenderProvider&gt;)</code> keeps working: Strut consults its registrations first and falls back to that override. New code should not need it.</p>
+
+<footer>Strut documentation.</footer>
+</main>
+</div>
+</body>
+</html>

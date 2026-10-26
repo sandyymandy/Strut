@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Asset sync - Strut docs</title>
+<link rel="stylesheet" href="assets/style.css">
+<script src="assets/docs.js" defer></script>
+</head>
+<body>
+<div class="layout">
+<main>
+<h1>Asset sync</h1>
+<p class="lead">Put a mod's models, textures and sounds in a data pack on the server. Every player receives them on join, with no resource pack to install.</p>
+
+<h2 id="why">Why</h2>
+<p>Content that players add (custom characters, say) normally needs two packs: a data pack for the server and a resource pack every player must install. Asset sync makes it one data pack. Strut sends the files during the join, keeps them in a cache, loads them as a resource pack, and only then lets the player spawn.</p>
+
+<h2 id="use">Using it</h2>
+<p>Most servers need no code. Put files here, in any data pack:</p>
+<pre><code>data/&lt;namespace&gt;/asset_sync/&lt;path&gt;</code></pre>
+<p>They reach players as <code>assets/&lt;namespace&gt;/&lt;path&gt;</code>. For example:</p>
+<table>
+	<tr><th>In the data pack</th><th>What the player sees</th></tr>
+	<tr><td><code>data/mymod/asset_sync/strut/models/entity/eve.strutmodel</code></td><td><code>assets/mymod/strut/models/entity/eve.strutmodel</code></td></tr>
+	<tr><td><code>data/mymod/asset_sync/textures/entity/eve.png</code></td><td><code>assets/mymod/textures/entity/eve.png</code></td></tr>
+	<tr><td><code>data/mymod/asset_sync/sounds/eve/cry1.ogg</code> and <code>sounds.json</code></td><td>The same paths under <code>assets/mymod/</code>. <code>sounds.json</code> and lang files merge with the mod's own.</td></tr>
+	<tr><td><code>data/mymod/asset_sync/strut/animations/entity/eve.strutanim</code></td><td>The client's animation, and also the server's event timeline. No second copy needed.</td></tr>
+	<tr><td><code>data/mymod/asset_sync/strut/event_bindings/eve.json</code></td><td>An <a href="events.html#bindings">event binding set</a>.</td></tr>
+</table>
+<p>For a mod that wants to <em>require</em> the assets, or generate some in code:</p>
+<pre class="sample" data-sample="asset-sync-server"><code>StrutAssetSync.setRequired(true);
+StrutAssetSync.addSource(sink -&gt; sink.add("mymod", "sounds.json", soundsJson));</code></pre>
+<p>Sources are called on every data reload, after the data packs, so what they add overrides the packs. On the client:</p>
+<pre class="sample" data-sample="asset-sync-client"><code>StrutAssetSyncClient.onAssetsReady(() -&gt; {
+	// the server's models, sounds and textures are loaded; the player has not joined yet
+});</code></pre>
+
+<h2 id="rules">What is accepted</h2>
+<ul>
+	<li><strong>File types:</strong> <code>png</code>, <code>ogg</code>, <code>json</code>, <code>mcmeta</code>, <code>strutmodel</code>, <code>strutanim</code>, <code>lang</code>, <code>txt</code>. Anything else (classes, jars, scripts, shaders) is skipped with a warning.</li>
+	<li><strong>Paths:</strong> lower-case letters, digits and <code>_ . - /</code> only. A file called <code>Bia.png</code> is skipped.</li>
+	<li><strong>Reserved namespaces:</strong> <code>minecraft</code>, <code>realms</code>, <code>fabric</code>, <code>fabricloader</code> and <code>c</code> cannot be written to.</li>
+	<li><strong>Size:</strong> 64 MiB per file and 512 MiB of distinct content held in memory on the server, by default (<code>StrutAssetSync.setLimits</code>). Identical files count once.</li>
+</ul>
+
+<h2 id="flow">What happens on join</h2>
+<ol>
+	<li>The server sends the list of files with their hashes.</li>
+	<li>The client compares it with its cache and asks only for what it lacks.</li>
+	<li>The server sends those files in chunks, with flow control, and the client verifies every file's hash before keeping it.</li>
+	<li>The client makes the files one more resource pack, reloads resources once, and tells the server it is done.</li>
+	<li>The server lets the player in.</li>
+</ol>
+<p>A returning player downloads nothing that has not changed. The cache is shared across servers and lives under <code>strut/asset-cache</code> in the game folder.</p>
+
+<h3 id="reload">When the server reloads</h3>
+<p>A <code>/reload</code> that changes the assets sends each connected player who accepted the earlier ones only the difference, and their client reloads once. A player who declined is not asked again. If a reload removes every asset, connected players drop them.</p>
+
+<h2 id="player">The player's controls</h2>
+<p>A server can only <em>offer</em>. The player's limits, in <code>config/strut-client.json</code>, are enforced on the client whatever the server says:</p>
+<table>
+	<tr><th>Key</th><th>Default</th><th>Meaning</th></tr>
+	<tr><td><code>acceptServerAssets</code></td><td><code>true</code></td><td>Turn asset sync off entirely.</td></tr>
+	<tr><td><code>maxDownloadPerServerMiB</code></td><td>512</td><td>The most one sync may download.</td></tr>
+	<tr><td><code>cacheLimitMiB</code></td><td>1024</td><td>Least recently used files are deleted above this.</td></tr>
+	<tr><td><code>maxTexturePixels</code></td><td>67108864</td><td>The largest a synced PNG may be (8192 x 8192). Larger is refused.</td></tr>
+</table>
+<p>If a player declines or is over their cap, they join without the assets, unless your mod called <code>setRequired(true)</code>, in which case they are refused with a clear reason.</p>
+
+<h2 id="safety">Safety</h2>
+<p>A server that can put files on a player's computer has to be treated as hostile, so the client checks everything:</p>
+<ul>
+	<li>Nothing received is ever run. Only data types are accepted, and no server-chosen name is ever used as a path on disk: cache files are named by their hash.</li>
+	<li>Every file's SHA-256 is verified before it is used, and sizes are checked before and during transfer.</li>
+	<li>Every read of a message is bounded before anything is allocated, and every state has a timeout.</li>
+	<li>PNG headers are checked before the game decodes them, so a tiny file cannot expand into an enormous image.</li>
+</ul>
+<p>What remains is the same exposure a vanilla server resource pack has: the game's own image and sound decoders, and other mods that read resource files.</p>
+
+<h2 id="try">Trying it</h2>
+<p>Start the game or server with <code>-Dstrut.assetSyncDemo=true</code>. The server offers a small <code>strut_demo</code> namespace. Join and press <kbd>F9</kbd>: the overlay shows the assets active and whether the game's own language loader and resource manager can see them. <code>/strut assets status</code> shows what the server offers and each player's progress.</p>
+
+<footer>Strut documentation.</footer>
+</main>
+</div>
+</body>
+</html>

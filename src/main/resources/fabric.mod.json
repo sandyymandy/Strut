@@ -1,0 +1,49 @@
+{
+	"schemaVersion": 1,
+	"id": "strut",
+	"version": "${version}",
+	"name": "${mod_display_name}",
+	"description": "${mod_description}",
+	"authors": [
+		"${mod_authors}"
+	],
+	"license": "${mod_license}",
+	"contact": {
+		"homepage": "https://modrinth.com/mod/strut",
+		"sources": "https://github.com/sandyymandy/Strut",
+		"issues": "https://github.com/sandyymandy/Strut/issues"
+	},
+	"icon": "icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"com.sandymandy.strut.Strut"
+		],
+		"client": [
+			"com.sandymandy.strut.StrutClient",
+			"com.sandymandy.strut.physics.StrutPhysicsClient"
+		],
+		"modmenu": [
+			"com.sandymandy.strut.physics.tools.PhysicsModMenu"
+		]
+	},
+	"mixins": [
+		"strut.mixins.json",
+		"strut-iris.mixins.json"
+	],
+	"accessWidener": "strut.accesswidener",
+	"depends": {
+		"fabricloader": "${fabric_loader_version_range}",
+		"fabric-api": "${fabric_api_version_range}",
+		"java": ">=21",
+		"minecraft": "${minecraft_version_range}"
+	},
+	"breaks": {
+		"geckoanimfix": "*"
+	},
+	"custom": {
+		"modmenu": {
+			"badges": [ "library" ]
+		}
+	}
+}

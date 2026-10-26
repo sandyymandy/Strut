@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scenes - Strut docs</title>
+<link rel="stylesheet" href="assets/style.css">
+<script src="assets/docs.js" defer></script>
+</head>
+<body>
+<div class="layout">
+<main>
+<h1>Scenes</h1>
+<p class="lead">Several entities, players with a body among them, animated together by the server on one clock: the base a mod builds a paired animation, a cutscene or a scene system on.</p>
+
+<p><em>Status: built and unit tested in the parts that need no running game (placement); not tried in a running game yet.</em></p>
+
+<h2 id="idea">The idea</h2>
+<p>Strut owns what every such system needs and none of what a scene means. A scene has <b>roles</b> (names you pick: <code>host</code>, <code>partner</code>), each filled by an entity placed at a spot in the scene's space. A <b>step</b> says which clip each role plays. Every clip of a step starts on the same game tick, so the clips stay in step for everyone however they are watching (the clock is the server's, see <a href="animations.html">playing animations</a>), and the next step replaces the one before on all roles at once. Which step follows, what an event does and how a scene is won are yours.</p>
+
+<h2 id="start">Starting one</h2>
+<pre><code>Scene scene = StrutScenes.create(new Identifier("mymod", "embrace"), world, origin, yaw)
+        .participant("host", creature, ScenePlacement.ORIGIN)
+        .participant("partner", player, ScenePlacement.offset(0, 0, 0.8).facing(180))
+        .onStepEnd(next -&gt; next.step().clip("host", "embrace_end").clip("partner", "embrace_end").start())
+        .onEnd((ended, why) -&gt; ...)
+        .start();
+
+scene.step().clip("host", "embrace_in").clip("partner", "embrace_in").start();   // both start on the same tick
+scene.setRate(1.5f);                                                              // faster for both, without a jump</code></pre>
+<p><code>start()</code> places everyone and plays nothing; <code>scene.step()...start()</code> plays. A role the step does not name stops what it was playing, so a step is also how a branch drops a participant's clip. <code>clip(role, name)</code> plays once and holds the last frame; <code>clip(role, name, LoopMode.LOOP)</code> loops. <code>clipThen(role, intro, then, LoopMode.LOOP)</code> plays an intro and, the moment it ends, the clip that follows it on the same clock with no gap (an intro and its loop, for one role); the step is not finished while the intro runs.</p>
+
+<h2 id="space">Where everyone stands</h2>
+<p>The scene has an origin and a yaw. A <code>ScenePlacement</code> is a spot in the scene's own space: <code>z</code> ahead, <code>x</code> to the left, <code>y</code> up, plus a turn from the scene's facing. Author the scene once with the host at the origin and the partner a step ahead and it works wherever it is placed; <code>scene.move(origin, yaw)</code> moves them all.</p>
+<ul>
+<li>A <b>player with a body</b> has the body drawn at the spot (<code>StrutPlayers.setAnchor</code>). The player themself is not moved or held by Strut: hold them with your own rule, asking <code>StrutScenes.inScene(player)</code> (it works on both sides).</li>
+<li>Any <b>other entity</b> is moved to its spot and held there, its AI off, for the scene's length, and given back afterwards. <code>holdEntities(false)</code> in the builder leaves them alone.</li>
+</ul>
+
+<h2 id="clips">Which controller plays</h2>
+<p>Every role plays on a controller of its entity: <code>scene</code> by default, which every player body has (over locomotion, swings and item use) and which a <code>StrutEntity</code> makes on demand. <code>participant(role, entity, placement, controllerName, required)</code> picks another. The clip names are found the way they are for any server-played animation: through the body's or entity's declared animation files, then by name if only one file has it.</p>
+
+<h2 id="steps">Steps, branches and the end</h2>
+<ul>
+<li>When every clip of a step that does not loop has run to its end, <code>onStepEnd</code> runs (once for each step). Start the next step in it, or the scene is over (<code>SceneEnd.COMPLETED</code>). A step made only of loops never ends by itself: the mod ends it, or starts another, when its own rule says.</li>
+<li>A clip whose length the server cannot find counts as still playing; give the scene a <code>timeout(ticks)</code> as a safety net.</li>
+<li><code>scene.seek(tick, fireCrossed)</code> and <code>scene.setRate(rate)</code> act on every clip of the step together.</li>
+<li><code>scene.end()</code> ends it now. Every way a scene ends stops the participants' clips, puts back the AI and the body anchors, and runs <code>onEnd</code> with the reason.</li>
+</ul>
+
+<h2 id="join">Joining and leaving</h2>
+<p><code>scene.join(role, entity, placement)</code> adds a participant to a scene that is running (a partner who gets on), placed and announced as at the start, with no clip until it is given one: by the next step, or by <code>scene.playNow(role, clip, loop)</code>, which starts a clip for that role alone and leaves the others as they were. <code>scene.leave(role)</code> takes one out: its clip stops, what the scene changed on it is put back, and the scene goes on, even if the role was required. So a participant changing does not mean a new scene, and nothing restarts.</p>
+
+<h2 id="lost">Losing a participant</h2>
+<p>A participant is required unless added with <code>optional(...)</code>. If a required one logs out, dies, is removed or changes dimension, the scene ends with <code>SceneEnd.PARTICIPANT_LOST</code>; an optional one just leaves its role. An entity is in one scene at a time: starting a second throws an exception that names the entity, the role and the scene it is in.</p>
+
+<h2 id="events">Events and the client</h2>
+<p>Clips of a scene fire their markers and typed events as any server-played clip does (<a href="events.html">events</a>). In a handler, <code>StrutScenes.sceneOf(context.entity())</code> on the server finds the scene and <code>scene.roleOf(entity)</code> the role. On every client that sees an entity in a scene, <code>StrutScenes.of(entity)</code> is its <code>SceneMember</code>: the scene's id, the role, the kind of scene and the origin, for a camera, a HUD or a rule. Taking part in a scene also makes a player a participant of what the other members' clips do (<code>ClientEventContext#isLocalPlayerParticipant</code>).</p>
+
+<h2 id="players">Players and stripping</h2>
+<p>A scene with players needs nothing special: give them a body (<a href="players.html">players with a body</a>) and the <code>scene</code> controller shows what the server plays. The same calls work outside a scene: <code>StrutPlayers.play(player, "strip", LoopMode.PLAY_ONCE)</code>, <code>setRate</code>, <code>seek</code>, <code>playing</code>, <code>hasEnded</code>. To undress, hide the armour with <code>StrutArmour.hideAll(entity)</code> (<code>setHidden</code> for one slot, <code>showAll</code> to dress again), and change the model a character is drawn with through the body's variant or its model (<a href="players.html">players</a>). A mod's strip then is: play the clip, hide the armour on its event, swap the variant.</p>
+
+<h2 id="limits">What to know</h2>
+<ul>
+<li>Scenes live in memory on the server and do not survive a restart.</li>
+<li>Strut does not hold a player in place (see above), choose a camera, move a partner onto a bone or decide what a scene means: those are the mod's.</li>
+<li>Required participants are checked every tick, so a scene ends within a tick of one leaving.</li>
+</ul>
+
+<footer>Strut documentation.</footer>
+</main>
+</div>
+</body>
+</html>

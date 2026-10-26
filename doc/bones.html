@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bone overrides and attachments - Strut docs</title>
+<link rel="stylesheet" href="assets/style.css">
+<script src="assets/docs.js" defer></script>
+</head>
+<body>
+<div class="layout">
+<main>
+<h1>Bone overrides and attachments</h1>
+<p class="lead">Change how a model looks and what it carries from server code, without touching its animation.</p>
+
+<h2 id="overrides">Bone overrides</h2>
+<p>An override changes one property of one bone on top of whatever the animation is doing: hide a hat, tint hair, turn a head. Set from the server, they are synced to every player tracking the entity, so they are the same for everyone and survive a player leaving and returning.</p>
+<pre class="sample" data-sample="bone-overrides"><code>entity.overrides().setHidden("hat", true);
+entity.overrides().setColor("hair", new Color(0xFFFF66AA));
+entity.overrides().setRotation("head", 0f, (float) Math.toRadians(25), 0f);
+entity.overrides().clear("hat", com.sandymandy.strut.animation.override.OverrideProperty.HIDDEN);</code></pre>
+<p>Call them on <code>entity.overrides()</code>. The properties are:</p>
+<table>
+	<tr><th>Property</th><th>Setter</th><th>Effect</th></tr>
+	<tr><td><code>HIDDEN</code></td><td><code>setHidden(bone, hidden)</code></td><td>Hides the bone and its children.</td></tr>
+	<tr><td><code>CHILDREN_HIDDEN</code></td><td><code>setChildrenHidden(bone, hidden)</code></td><td>Hides the bone's children but not the bone itself.</td></tr>
+	<tr><td><code>POSITION</code></td><td><code>setPosition(bone, x, y, z)</code></td><td>Offsets the bone.</td></tr>
+	<tr><td><code>ROTATION</code></td><td><code>setRotation(bone, x, y, z)</code></td><td>Sets the bone's rotation, <b>in radians</b>, in place of what the animation gave it (it does not add to it).</td></tr>
+	<tr><td><code>SCALE</code></td><td><code>setScale(bone, x, y, z)</code></td><td>Scales the bone.</td></tr>
+	<tr><td><code>COLOR</code></td><td><code>setColor(bone, color)</code></td><td>Tints the bone (ARGB).</td></tr>
+	<tr><td><code>UV_OFFSET</code></td><td><code>setUvOffset(bone, u, v)</code></td><td>Scrolls the bone's texture coordinates.</td></tr>
+	<tr><td><code>UV_SIZE</code></td><td><code>setUvSize(bone, w, h)</code>, or <code>setTexture(bone, texture, w, h)</code></td><td>The pixel size the bone's UVs are read against. A model's UVs are fractions of its own texture, so a texture override of another size (a 64 x 64 player skin on a model made for a smaller texture) misses its pixels; with the size set the UVs are rescaled by the model's texture size over this one. Applies to every texture drawn on the bone, an overlay too.</td></tr>
+	<tr><td><code>TEXTURE</code></td><td><code>setTexture(bone, texture)</code></td><td>Draws the bone with a different texture.</td></tr>
+	<tr><td><code>TRANSLUCENT</code></td><td><code>setTranslucent(bone, translucent)</code></td><td>Draws the bone blended, after the opaque geometry. See <a href="rendering.html#translucency">Rendering</a>.</td></tr>
+	<tr><td><code>OVERLAY_0</code> to <code>OVERLAY_3</code></td><td><code>setOverlay(bone, layer, texture)</code>, <code>clearOverlay(bone, layer)</code></td><td>Draws a second texture over the bone, translucent, on top of its own. A higher layer draws later.</td></tr>
+</table>
+<p><code>clear(bone, property)</code> removes one. Every setter also has a long form taking a <em>scope</em>, a <em>priority</em>, a <em>blend weight</em> and a <em>transition</em> time in ticks. The higher priority wins where two overrides touch the same property, and the blend weight and transition fade an override in and out.</p>
+<table>
+	<tr><th>Scope</th><th>Lasts</th></tr>
+	<tr><td><code>PERSISTENT</code></td><td>Until you clear it.</td></tr>
+	<tr><td><code>CONTROLLER</code>, <code>SYNC_GROUP</code></td><td>Reserved for overrides that clear themselves with a controller state or a synchronisation group. Nothing clears them yet, so today they behave like <code>PERSISTENT</code>.</td></tr>
+	<tr><td><code>FRAME</code></td><td>Clears at the end of the client frame that set it: for a per-viewer, per-frame decision such as hiding the local player's own head only in first person. Client-only in practice.</td></tr>
+</table>
+<div class="callout note">
+<p><strong class="label">Note.</strong> A texture override on a bone is not redrawn in the shadow pass under shader packs: it changes colour, not the silhouette a shadow needs.</p>
+</div>
+
+<h2 id="attachments">Attachments</h2>
+<p>An attachment carries an item or a block on a bone: a sword in a hand, a crate on a back. It follows the bone through every animation. Attachments are keyed by a <em>slot</em> name you choose, so you can replace or clear one without touching the others.</p>
+<pre class="sample" data-sample="attachments"><code>entity.attachments().setItem("main_hand", "right_hand", Identifier.of("minecraft", "diamond_sword"));
+entity.attachments().setBlock("crate", "back", Identifier.of("minecraft", "barrel"));
+entity.attachments().clear("main_hand");</code></pre>
+<p>Both <code>setItem</code> and <code>setBlock</code> have longer forms for a stack count and a transform; their rotation is in <b>radians</b>, and <code>setItem</code> draws the item model with no holder (its display transform is not applied). For something a character holds, use <code>setHeldItem(slot, bone, item, count, rightHand, offsetX, offsetY, offsetZ, rotXDegrees, rotYDegrees, rotZDegrees, scale)</code>: it draws the item as a player's hand does, with the model's own third-person transform, and takes the same offset (blocks) and turn (degrees) as <code>HandItem</code> does for a player body, so a character and a player body holding the same item look the same. Like overrides, attachments are set on the server and synced.</p>
+
+<footer>Strut documentation.</footer>
+</main>
+</div>
+</body>
+</html>

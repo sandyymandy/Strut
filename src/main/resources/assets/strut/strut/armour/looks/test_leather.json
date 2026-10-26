@@ -1,0 +1,11 @@
+{
+  "set": "strut:test",
+  "match": {
+    "materials": [
+      "minecraft:leather"
+    ]
+  },
+  "column": 6,
+  "tint": "dye",
+  "undyed": "#A06540"
+}

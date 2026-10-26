@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Changing the render pipeline - Strut docs</title>
+<link rel="stylesheet" href="assets/style.css">
+<script src="assets/docs.js" defer></script>
+</head>
+<body>
+<div class="layout">
+<main>
+<h1>Changing the render pipeline</h1>
+<p class="lead">Put your own GLSL into the shader every model is drawn with, add coloured lights, hand per-model values to the shader and run code around the draw, all from your mod and without a copy of Strut's renderer.</p>
+
+<p>Everything here is client side and applies to the GPU path's own shader. Under a shader pack the pack draws the model with its own program, and these hooks are not used (see <a href="rendering.html#shaders">Shader packs</a>).</p>
+
+<h2 id="shader-hooks">Shader hooks</h2>
+<p>A hook is a piece of GLSL registered under an id at a named place in the vertex or fragment shader. Strut builds the shader with every hook in place the first time a model is drawn, and again whenever hooks are added or taken out. Hooks at one place run in the order they were registered.</p>
+<pre><code>StrutShaderHooks.register(MyMod.id("wobble"), StrutShaderHooks.Point.VERTEX_POSE,
+		"posedPosition.y += 0.02 * sin(posedPosition.x * 4.0 + StrutParams[0].x) * instData.custom[0];");</code></pre>
+<table>
+	<tr><th>Point</th><th>Where</th><th>In reach</th></tr>
+	<tr><td><code>VERTEX_DECLS</code></td><td>Top level of the vertex shader</td><td>Put functions and constants here for the other vertex hooks.</td></tr>
+	<tr><td><code>VERTEX_POSE</code></td><td>After the vertex is posed, before it is projected</td><td>Change <code>posedPosition</code> (a <code>vec4</code>, relative to the camera, not yet rotated by it) and <code>worldNormal</code>. Read <code>instData</code> (<code>instData.custom[0..3]</code> are your floats), <code>gl_InstanceID</code>, <code>BoneIndex</code>.</td></tr>
+	<tr><td><code>VERTEX_COLOR</code></td><td>End of the vertex shader</td><td>Change <code>vertexColor</code> (the shading) and <code>lightTint</code> (the colour of the light). Set <code>strutVarying0</code> and <code>strutVarying1</code>, a <code>vec4</code> each, which reach the fragment shader interpolated.</td></tr>
+	<tr><td><code>FRAGMENT_DECLS</code></td><td>Top level of the fragment shader</td><td>Functions and constants for the other fragment hooks.</td></tr>
+	<tr><td><code>FRAGMENT_TOON</code></td><td>First thing in <code>toonColor(vec3 albedo, float shade, float rim)</code></td><td><code>return</code> a colour to replace the toon look, or change <code>albedo</code>, <code>shade</code> (0.55 in the shadow, 1 in the light) and <code>rim</code> (0 facing the eye, 1 edge on) to adjust it.</td></tr>
+	<tr><td><code>FRAGMENT_ALBEDO</code></td><td>After the texture is read</td><td>Change <code>color</code>, the model's own colour before any light. Read <code>texCoord</code>, <code>fragPos</code>, <code>strutCustom</code> (a <code>vec4</code>), <code>strutVarying0</code>, <code>strutVarying1</code>.</td></tr>
+	<tr><td><code>FRAGMENT_FINAL</code></td><td>After the light, before the fog</td><td>Change <code>color</code>, what would be drawn.</td></tr>
+</table>
+<p>Everything declared with <code>uniform vec4 StrutParams[8]</code> is in both stages. A hook that does not compile is left out and logged with the ids registered, and the models are drawn as if none was; it is not tried again until the hooks change. <code>StrutShaderHooks.unregister(id)</code> takes an id out at every point.</p>
+
+<h2 id="params">Values for the shader</h2>
+<ul>
+	<li><strong>For every model:</strong> <code>StrutShaderParams.set(slot, x, y, z, w)</code> sets one of eight <code>vec4</code>s, read in the shader as <code>StrutParams[slot]</code>. They are uploaded once a frame as they stand then: a time, a colour, a strength.</li>
+	<li><strong>For one model:</strong> in a <code>StrutRenderHooks.SUBMIT</code> listener, <code>context.setCustom(index, value)</code> sets one of four floats that go with that model, read as <code>instData.custom[i]</code> in the vertex hooks and <code>strutCustom[i]</code> in the fragment ones.</li>
+</ul>
+
+<h2 id="lights">Coloured lights</h2>
+<p>A model is lit by up to four lights: the sky's (the sun or the moon), and the three strongest of the glowing blocks round it and the lights mods add; the weaker ones are added together into the last. Each light shapes the side of the model that faces it, and a light with a colour tints that side the way a coloured lamp does to a white wall.</p>
+<pre><code>// a mob that glows blue lights what is near it
+StrutLighting.addProvider((animatable, world, x, y, z, sink) -> {
+	for (GlowMob mob : world.getEntitiesByClass(GlowMob.class, new Box(x - 6, y - 6, z - 6, x + 6, y + 6, z + 6), e -> true))
+		sink.point(mob.getX(), mob.getEyeY(), mob.getZ(), 6.0, 1.0f, 0x4080FF);
+});
+
+// a lamp of one colour
+StrutLighting.setBlockLightColour(Blocks.SOUL_LANTERN, 0x40C0FF);</code></pre>
+<ul>
+	<li><code>sink.point(x, y, z, radius, brightness, rgb)</code>: a light in the world; it reaches <code>radius</code> blocks and fades out toward the edge. A <code>brightness</code> of 1 is a torch's.</li>
+	<li><code>sink.directional(dx, dy, dz, strength, rgb)</code>: a light from a direction, like the sun.</li>
+	<li>A provider runs on the render thread, a few times a second for each model: keep it cheap. One that throws is skipped for that frame.</li>
+	<li>The invisible <code>light</code> block is not counted as a light.</li>
+</ul>
+<p>The F9 overlay shows the lights on you and on the model drawn last, each as <code>[direction |strength| #colour]</code>, and the block that is the strongest light.</p>
+
+<h2 id="events">Events along the draw</h2>
+<table>
+	<tr><th>Event</th><th>When</th></tr>
+	<tr><td><code>StrutRenderHooks.onSubmit(listener)</code></td><td>A model is about to be queued. The <code>SubmitContext</code> gives its <code>animatable()</code> and lets you change its <code>colour</code>, how it is shaded (<code>setShading</code>) and the four custom floats. Register with <code>onSubmit</code>, not <code>SUBMIT.register</code>, so Strut knows there is a listener to ask.</td></tr>
+	<tr><td><code>StrutRenderHooks.BEFORE_DRAW</code></td><td>The frame's models are about to be drawn and Strut's shader is not yet bound. Draw your own things, or set state; put back what you change.</td></tr>
+	<tr><td><code>StrutRenderHooks.AFTER_DRAW</code></td><td>They have been drawn and Strut has put its own state back.</td></tr>
+</table>
+<pre><code>StrutRenderHooks.onSubmit(context -> {
+	if (context.animatable() instanceof Entity entity &amp;&amp; entity.hurtTime > 0)
+		context.setCustom(0, entity.hurtTime / 10f);
+});
+
+// in the fragment shader, a hook reads it
+StrutShaderHooks.register(MyMod.id("hurt"), StrutShaderHooks.Point.FRAGMENT_ALBEDO,
+		"color.rgb = mix(color.rgb, vec3(1.0, 0.1, 0.1), strutCustom.x * 0.6);");</code></pre>
+
+<h2 id="toon">The toon look</h2>
+<p>The toon look is a function in the fragment shader, so it is changed with the <code>FRAGMENT_TOON</code> hook: <code>shade</code> is how lit the surface is, <code>albedo</code> the texture's own colour. This gives two flat bands and no rim:</p>
+<pre><code>StrutShaderHooks.register(MyMod.id("two_band"), StrutShaderHooks.Point.FRAGMENT_TOON,
+		"return albedo * mix(0.55, 1.0, step(0.7, shade));");</code></pre>
+
+<footer>Strut documentation.</footer>
+</main>
+</div>
+</body>
+</html>

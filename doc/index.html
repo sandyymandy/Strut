@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Strut documentation</title>
+<link rel="stylesheet" href="assets/style.css">
+<script src="assets/docs.js" defer></script>
+</head>
+<body>
+<div class="layout">
+<main>
+<h1>Strut</h1>
+<p class="lead">A mesh and animation engine for Minecraft Java mods, for Fabric on 1.21.1. Server-authoritative animation, typed animation events, and asset delivery, with as little code in your mod as possible.</p>
+<noscript><p><a href="getting-started.html">Getting started</a> &middot; <a href="entities.html">Entities</a> &middot; <a href="items-and-blocks.html">Items and blocks</a> &middot; <a href="animations.html">Animations</a> &middot; <a href="events.html">Events</a></p></noscript>
+
+<h2 id="what">What Strut gives you</h2>
+<ul>
+	<li><strong>Free-form meshes and armatures</strong>, not just cubes: skinned, deformable models in a compact binary format (<code>.strutmodel</code>, <code>.strutanim</code>) written by the Blockbench plugin.</li>
+	<li><strong>The server owns animation.</strong> Your code says "play <em>walk</em> on <em>base</em>"; every client derives the exact pose from a shared clock. Late joiners, lag and reconnects just work. See <a href="animations.html">Playing animations</a>.</li>
+	<li><strong>Typed events with an exactly-once guarantee.</strong> Keyframes in a clip can run gameplay code on the server and cosmetic code (sounds, particles) on clients, without duplicates or skips. See <a href="events.html">Events</a>.</li>
+	<li><strong>Asset sync.</strong> Put models, textures and sounds in a data pack on the server; every player receives them on join, with no resource pack to install. See <a href="asset-sync.html">Asset sync</a>.</li>
+	<li><strong>Shader-pack friendly, fast rendering.</strong> A GPU instanced path that works under Iris shaders, including shadows. See <a href="rendering.html">Rendering and performance</a>.</li>
+	<li><strong>Almost no boilerplate.</strong> An entity is a class with no body and a one-line registration. See <a href="entities.html">Entities</a>.</li>
+</ul>
+
+<h2 id="start">Where to start</h2>
+<div class="cards">
+	<a class="card" href="getting-started.html"><strong>Getting started</strong><span>Your first Strut entity in five minutes.</span></a>
+	<a class="card" href="entities.html"><strong>Entities</strong><span>The class, the registration, and how files are found.</span></a>
+	<a class="card" href="items-and-blocks.html"><strong>Items, armor and blocks</strong><span>The same one-line registration for everything else.</span></a>
+	<a class="card" href="players.html"><strong>Players with a body</strong><span>Draw a player as a Strut model, with no second entity.</span></a>
+	<a class="card" href="armour.html"><strong>Armour</strong><span>A model for each slot, bound to the wearer by bone name.</span></a>
+	<a class="card" href="scenes.html"><strong>Scenes</strong><span>Several entities animated together: the base for cutscenes and paired animations.</span></a>
+	<a class="card" href="animations.html"><strong>Playing animations</strong><span>play, seek, setRate and stop from the server.</span></a>
+	<a class="card" href="events.html"><strong>Events</strong><span>Markers, sounds and your own typed events.</span></a>
+	<a class="card" href="migrating.html"><strong>Coming from GeckoLib?</strong><span>The rename table and what changed.</span></a>
+	<a class="card" href="physics.html"><strong>Physics</strong><span>Jiggle, hair, cloth, flesh and ragdolls, in the optional module.</span></a>
+</div>
+
+<h2 id="requirements">Requirements</h2>
+<table>
+	<tr><th>Minecraft</th><td>1.21.1 (Java Edition)</td></tr>
+	<tr><th>Loader</th><td>Fabric Loader 0.17 or newer, with Fabric API 0.100.0+1.21 or newer</td></tr>
+	<tr><th>Java</th><td>21</td></tr>
+	<tr><th>Optional</th><td>Iris (shader packs) is supported and detected automatically</td></tr>
+</table>
+
+<div class="callout note">
+<p><strong class="label">About the names.</strong> Strut began as a fork of GeckoLib and inherits its keyframe animation engine. The API has been renamed to Strut names; if you are moving a mod over, read <a href="migrating.html">Migrating from GeckoLib</a>.</p>
+</div>
+
+<footer>Strut documentation. Every Java sample in these pages is compiled as part of Strut's build.</footer>
+</main>
+</div>
+</body>
+</html>

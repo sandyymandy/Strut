@@ -1,0 +1,11 @@
+{
+  "key.categories.strut": "Strut",
+  "key.strut_physics.tool": "Open Physics Tool",
+  "key.strut.toggle_perf_overlay": "Toggle Render Perf Overlay",
+  "key.strut.cycle_seam_debug": "Cycle Seam Debug Mode",
+  "strut.asset_sync.declined": "This server requires its custom assets, but server assets are turned off in your Strut settings.",
+  "strut.asset_sync.too_large": "This server's custom assets are larger than your Strut download limit.",
+  "strut.asset_sync.failed": "The server's custom assets could not be loaded.",
+  "strut.asset_sync.broken": "Asset sync with the server failed.",
+  "strut.asset_sync.unsupported": "This server requires its custom assets, which needs the Strut mod."
+}

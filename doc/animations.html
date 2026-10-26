@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Playing animations - Strut docs</title>
+<link rel="stylesheet" href="assets/style.css">
+<script src="assets/docs.js" defer></script>
+</head>
+<body>
+<div class="layout">
+<main>
+<h1>Playing animations</h1>
+<p class="lead">The server decides what plays and when. Clients derive the pose from a shared clock.</p>
+
+<h2 id="model">How it works</h2>
+<p>An entity's animation is a small piece of state on the server, per <em>controller</em>: which clip is playing, the game tick it started at, a start offset, a playback rate and a loop mode. When it changes, the server sends the <em>change</em> (not frames) to the players tracking the entity. Each client works out the current pose from the world clock. Because the state is tiny and complete:</p>
+<ul>
+	<li>a player who walks into range gets a snapshot and is immediately in sync;</li>
+	<li>lag delays a change but never corrupts the timing, since the start tick is absolute;</li>
+	<li>a resync is sent periodically (every 200 ticks) and on request, so a lost message heals itself;</li>
+	<li>each change carries a per-controller sequence number, so a late packet can never overwrite a newer one.</li>
+</ul>
+
+<p><b>A clip with no length.</b> A clip whose length is 0 (a bone driven only by molang, such as <code>math.sin(query.anim_time * 90)</code>) loops without end: its <code>query.anim_time</code> keeps counting, in seconds. Molang's trigonometry is in degrees, so a rocking of one turn a second is <code>math.sin(query.anim_time * 360)</code>.</p>
+<h2 id="play">Playing a clip</h2>
+<pre class="sample" data-sample="play-animation"><code>ServerAnimationStates.forEntity(entity, false)
+		.play("base", "walk", entity.getWorld().getTime(), 0, 1f, LoopMode.LOOP);</code></pre>
+<table>
+	<tr><th>Argument</th><th>Meaning</th></tr>
+	<tr><td>entity, <code>false</code></td><td>The entity. The boolean is for replaced entities (a Strut model on a vanilla entity); pass <code>false</code> for your own.</td></tr>
+	<tr><td><code>"base"</code></td><td>The controller name. Use one controller per thing that can play at the same time (a body loop, a facial expression). Names are yours to choose.</td></tr>
+	<tr><td><code>"walk"</code></td><td>The clip name inside the entity's <code>.strutanim</code>.</td></tr>
+	<tr><td>start tick</td><td>The game tick it starts at, normally the current world time.</td></tr>
+	<tr><td>offset</td><td>Where in the clip to start, in clip ticks.</td></tr>
+	<tr><td>rate</td><td>Playback speed. <code>1</code> is normal.</td></tr>
+	<tr><td>loop mode</td><td><code>LOOP</code>, <code>PLAY_ONCE</code> or <code>HOLD_ON_LAST_FRAME</code>.</td></tr>
+</table>
+<p>Playing on a controller that is already playing replaces what was there.</p>
+
+<h2 id="control">Changing what is playing</h2>
+<pre class="sample" data-sample="control-animation"><code>long now = entity.getWorld().getTime();
+
+ServerAnimationStates.forEntity(entity, false).setRate("base", 2f, now);       // play twice as fast from now on
+ServerAnimationStates.forEntity(entity, false).seek("base", 40f, now, false);  // jump to tick 40 without firing events
+ServerAnimationStates.forEntity(entity, false).stop("base", now);              // stop</code></pre>
+<ul>
+	<li><code>setRate</code> changes speed from that tick on without a jump: the pose continues from where it was.</li>
+	<li><code>seek</code> jumps to a clip tick. The last argument decides whether events between the old and new position fire (<code>true</code>) or are skipped silently (<code>false</code>).</li>
+	<li><code>stop</code> ends the controller. Pass the game tick so events up to that moment are still delivered.</li>
+</ul>
+
+<h2 id="controllers">Controllers</h2>
+<p>You do not need to register controllers for server-driven animation: the client creates a default controller the first time the server plays on a name that has none. Register one yourself when you want to tune it (transition time, triggerable animations, sound handlers), or to animate on the client.</p>
+<p><strong>Blending.</strong> The server only says which clip plays; the client decides how it looks. When the clip a server-driven controller mirrors changes to a different clip, the controller blends from the pose it was showing into the new clip over its own <code>transitionLength</code> (ticks, set when you register the controller, for example <code>new AnimationController&lt;&gt;(this, "body", 4, handler)</code>; the handler is not run for a server-driven controller, only the length is used). The target moves with the clip, so a clip joined mid-way blends into the right frame. There is no blend for the first clip a controller shows (an entity that comes into range mid-scene), for the same clip again (a rate change, a seek, a restart) or when the length is 0, and the default controller the client creates by itself has length 0, so register one to blend. Bones the old clip moved and the new one does not return to rest over the bone reset time, as always.</p>
+
+<p><strong>Blending out.</strong> A controller that plays over another (an arm's action over the legs' walk) can fade out instead of letting go of the bones at once when it stops: <code>new AnimationController&lt;&gt;(this, "use", 5, handler).blendOut(true)</code>. Over its transition length each bone it was animating goes from where it left it to what the controllers registered before it give the bone, or to rest if none do. A chained animation (<code>then(charge, PLAY_ONCE).thenLoop(hold)</code>) blends from the last frame of one clip into the next.</p>
+
+<h3 id="authority">Server or client decides</h3>
+<table>
+	<tr><th>Mode</th><th>Behaviour</th></tr>
+	<tr><td><code>SERVER</code></td><td>The default for a <code>StrutEntity</code>. The server's state is the truth; the controller's handler is not consulted.</td></tr>
+	<tr><td><code>CLIENT_COSMETIC</code></td><td>The default for items, block entities and everything that is not an entity. The client decides through the controller's handler. Opt an entity's controller into this with <code>authorityMode(...)</code> for purely visual animation.</td></tr>
+	<tr><td><code>SERVER_WITH_LOCAL_PREDICTION</code></td><td>Reserved for later. It currently behaves like client-decided.</td></tr>
+</table>
+
+<p>A client-decided controller uses a handler that returns a state, exactly as in the block entity example on <a href="items-and-blocks.html#item-animation">Items, armor and blocks</a>.</p>
+
+<h2 id="performance">Performance: level of detail</h2>
+<p>Animations far from the camera are evaluated less often. If an animatable's keyframe-driven sounds, particles or events must stay frame-exact at any distance (a boss telegraph, say), override <code>useAnimationLod()</code> to return <code>false</code>. Server-side events are not affected either way. See <a href="rendering.html">Rendering and performance</a>.</p>
+
+<footer>Strut documentation.</footer>
+</main>
+</div>
+</body>
+</html>

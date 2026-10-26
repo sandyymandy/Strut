@@ -1,0 +1,14 @@
+{
+  "required": false,
+  "package": "com.sandymandy.strut.mixin.iris",
+  "compatibilityLevel": "JAVA_17",
+  "refmap": "strut-iris.refmap.json",
+  "minVersion": "0.8",
+  "plugin": "com.sandymandy.strut.mixin.iris.IrisMixinPlugin",
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "client": [
+    "ShadowRendererMixin"
+  ]
+}

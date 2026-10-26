@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Migrating from GeckoLib - Strut docs</title>
+<link rel="stylesheet" href="assets/style.css">
+<script src="assets/docs.js" defer></script>
+</head>
+<body>
+<div class="layout">
+<main>
+<h1>Migrating from GeckoLib</h1>
+<p class="lead">Strut began as a fork of GeckoLib. This page is the checklist for moving a mod over: names, boilerplate you can now delete, and the behaviours that differ.</p>
+
+<div class="callout note">
+<p><strong class="label">There are no compatibility aliases.</strong> The old <code>Geo*</code> names are gone, not deprecated. Changing your imports is a one-time job and the compiler finds every place that needs it.</p>
+</div>
+
+<h2 id="steps">Steps</h2>
+<ol>
+	<li><a href="#dependency">Swap the dependency.</a></li>
+	<li><a href="#names">Rename the classes.</a></li>
+	<li><a href="#formats">Convert models and animations to the binary formats.</a></li>
+	<li><a href="#boilerplate">Delete the boilerplate you no longer need.</a></li>
+	<li><a href="#animation">Move animation decisions to the server.</a></li>
+	<li><a href="#events">Replace string-parsed keyframe handlers with typed events.</a></li>
+</ol>
+
+<h2 id="dependency">1. Dependency</h2>
+<p>Replace the GeckoLib dependency with Strut (see <a href="getting-started.html#dependency">Getting started</a>) and change the <code>depends</code> entry in <code>fabric.mod.json</code> from <code>geckolib</code> to <code>strut</code>. Packages move from <code>software.bernie.geckolib</code> to <code>com.sandymandy.strut</code>. Most subpackages keep their names (<code>animatable</code>, <code>animation</code>, <code>model</code>, <code>renderer</code>, <code>cache.object</code>), but a few classes moved, and <code>GeckoLibUtil</code> is <code>StrutUtil</code>. Fix the package prefix first, then let the compiler point at what remains.</p>
+
+<h2 id="names">2. Names</h2>
+<p>Every identifier containing <code>Geo</code> followed by a capital letter now says <code>Strut</code> instead; a lower-case <code>geo</code> followed by a capital (<code>geoModel</code>) became <code>strut</code>. The main ones:</p>
+<table>
+	<tr><th>GeckoLib</th><th>Strut</th></tr>
+	<tr><td><code>GeoAnimatable</code></td><td><code>StrutAnimatable</code></td></tr>
+	<tr><td><code>GeoEntity</code></td><td><code>StrutEntity</code></td></tr>
+	<tr><td><code>GeoItem</code></td><td><code>StrutItem</code></td></tr>
+	<tr><td><code>GeoBlockEntity</code></td><td><code>StrutBlockEntity</code></td></tr>
+	<tr><td><code>GeoReplacedEntity</code></td><td><code>StrutReplacedEntity</code></td></tr>
+	<tr><td><code>GeoModel</code>, <code>DefaultedEntityGeoModel</code>, <code>DefaultedItemGeoModel</code>, <code>DefaultedBlockGeoModel</code></td><td><code>StrutModel</code>, <code>DefaultedEntityStrutModel</code>, <code>DefaultedItemStrutModel</code>, <code>DefaultedBlockStrutModel</code></td></tr>
+	<tr><td><code>GeoEntityRenderer</code>, <code>GeoItemRenderer</code>, <code>GeoBlockRenderer</code>, <code>GeoArmorRenderer</code></td><td><code>StrutEntityRenderer</code>, <code>StrutItemRenderer</code>, <code>StrutBlockRenderer</code>, <code>StrutArmorRenderer</code></td></tr>
+	<tr><td><code>GeoRenderProvider</code></td><td><code>StrutRenderProvider</code></td></tr>
+	<tr><td><code>BakedGeoModel</code></td><td><code>BakedStrutModel</code></td></tr>
+	<tr><td><code>GeckoLibUtil</code></td><td><code>StrutUtil</code></td></tr>
+</table>
+<p>The complete list is at the <a href="#map">end of this page</a>. On a Unix shell, a first pass over your sources can be:</p>
+<pre><code>find src -name "*.java" | xargs sed -i -E 's/Geo([A-Z])/Strut\1/g; s/\bgeo([A-Z])/strut\1/g'</code></pre>
+<p>then fix the package prefix and <code>GeckoLibUtil</code>. Names that did not change: <code>AnimationController</code>, <code>AnimatableManager</code>, <code>RawAnimation</code>, <code>PlayState</code>, <code>DataTickets</code>, <code>GeometryTree</code>. The <code>geo/</code> and <code>animations/</code> asset folders are no longer read: models go under <code>assets/&lt;ns&gt;/strut/models/</code> and animations under <code>assets/&lt;ns&gt;/strut/animations/</code> (move the files, nothing inside them changes), and an armour model <code>ns:armour/x</code> is <code>strut/models/armour/x.strutmodel</code>.</p>
+
+<h2 id="formats">3. Models and animations</h2>
+<p>Strut's conventions, its server-side event timelines and its Blockbench plugin work on <code>.strutmodel</code> and <code>.strutanim</code>. Open your existing models in Blockbench with the Strut plugin and save them in the binary formats. The conventional model classes (<code>StrutModel.entity(id)</code> and friends, formerly the <code>Defaulted*GeoModel</code> classes) now resolve <code>.strutmodel</code> and <code>.strutanim</code> paths instead of <code>.geo.json</code> and <code>.animation.json</code>. Legacy JSON files can still be loaded by naming them explicitly, but events read binary clips only.</p>
+
+<h2 id="boilerplate">4. Boilerplate you can delete</h2>
+<p>A typical GeckoLib entity:</p>
+<pre><code>public class HeroEntity extends PathAwareEntity implements GeoEntity {
+	private final AnimatableInstanceCache cache = GeckoLibUtil.createInstanceCache(this);
+
+	public HeroEntity(EntityType&lt;? extends HeroEntity&gt; type, World world) {
+		super(type, world);
+	}
+
+	@Override
+	public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {
+		controllers.add(new AnimationController&lt;&gt;(this, "base", 0, state -&gt; state.setAndContinue(...)));
+	}
+
+	@Override
+	public AnimatableInstanceCache getAnimatableInstanceCache() {
+		return this.cache;
+	}
+
+	@Override
+	public double getTick(Object entity) {
+		return ((Entity)entity).age;
+	}
+}
+// plus HeroModel extends GeoModel, HeroRenderer extends GeoEntityRenderer,
+// and EntityRendererRegistry.register(AVA, HeroRenderer::new)</code></pre>
+<p>In Strut:</p>
+<pre class="sample" data-sample="migrate-after"><code>public class HeroStrutEntity extends PathAwareEntity implements StrutEntity {
+	public HeroStrutEntity(EntityType&lt;? extends HeroStrutEntity&gt; type, World world) {
+		super(type, world);
+	}
+
+	// No cache field, no getAnimatableInstanceCache(), no getTick(), and no registerControllers()
+	// unless you animate on the client. The server plays animations; see "Playing animations".
+}</code></pre>
+<p>and one line in the client initialiser:</p>
+<pre class="sample" data-sample="client-entity"><code>StrutClient.entity(AVA);</code></pre>
+<table>
+	<tr><th>Delete</th><th>Because</th></tr>
+	<tr><td>The cache field and <code>getAnimatableInstanceCache</code></td><td>Held by a slot Strut adds to entities, block entities and items.</td></tr>
+	<tr><td><code>getTick</code> on an entity</td><td>Defaults to the entity's age.</td></tr>
+	<tr><td><code>registerControllers</code></td><td>Optional. For server-driven entities the controllers are created when the server plays on them.</td></tr>
+	<tr><td>Model subclasses that only return three constant paths</td><td>The convention finds them, or use <code>StrutModel.builder()</code>.</td></tr>
+	<tr><td>Renderer subclasses that only have a constructor</td><td><code>StrutClient.entity(type)</code>.</td></tr>
+	<tr><td><code>createGeoRenderer</code> with an anonymous render provider, on items</td><td><code>StrutClient.item(item)</code>. (The old override still works.)</td></tr>
+	<tr><td><code>registerSyncedAnimatable</code> in an item's constructor</td><td>Items register themselves.</td></tr>
+</table>
+<p>See <a href="entities.html">Entities</a> and <a href="items-and-blocks.html">Items, armor and blocks</a>.</p>
+
+<h2 id="animation">5. Animation authority</h2>
+<p>This is the one real behavioural change. In GeckoLib a controller's handler runs on each client and decides what plays. In Strut a <code>StrutEntity</code>'s controllers are <strong>server-authoritative by default</strong>: the server plays, seeks and changes the rate, and the handler is not consulted. Move the decision to server code:</p>
+<pre class="sample" data-sample="play-animation"><code>ServerAnimationStates.forEntity(entity, false)
+		.play("base", "walk", entity.getWorld().getTime(), 0, 1f, LoopMode.LOOP);</code></pre>
+<p>A controller can still be client-decided, either by opting out with <code>authorityMode(AuthorityMode.CLIENT_COSMETIC)</code> or because it belongs to an item or block entity, which are client-cosmetic by default. A GeckoLib handler that read entity state to choose an animation is the code to look at first. See <a href="animations.html">Playing animations</a>.</p>
+
+<h2 id="events">6. Keyframe events</h2>
+<p>GeckoLib's sound, particle and custom-instruction keyframe handlers ran on the client from the animation frame, so a lagging or culled client could miss or repeat them. In Strut, gameplay events are delivered on the server exactly once, and cosmetic events on clients at most once. A custom instruction that was a string you parsed yourself becomes a typed event you register once; a marker becomes <code>StrutEvents.onServerMarker</code>. See <a href="events.html">Events</a>.</p>
+
+<h2 id="differences">Other differences</h2>
+<table>
+	<tr><th>Area</th><th>Difference</th></tr>
+	<tr><td>Formats</td><td>Binary <code>.strutmodel</code> and <code>.strutanim</code> are the supported path. The Blockbench plugin reads and writes them.</td></tr>
+	<tr><td>Loaders</td><td>Fabric only, Minecraft 1.21.1.</td></tr>
+	<tr><td>Meshes</td><td>Free-form meshes and armature skinning, in addition to cubes.</td></tr>
+	<tr><td>Bones</td><td>Server-synced bone overrides and attachments, see <a href="bones.html">Bone overrides and attachments</a>.</td></tr>
+	<tr><td>Content delivery</td><td><a href="asset-sync.html">Asset sync</a> delivers server-owned models, textures and sounds.</td></tr>
+	<tr><td>Rendering</td><td>An instanced GPU path with shader-pack support and shadows, see <a href="rendering.html">Rendering and performance</a>. It is the only path: there is no CPU walk of the bones, so what hooked it is gone. <code>renderRecursively</code>, <code>renderCubesOfBone</code>, <code>renderMeshesOfBone</code>, <code>renderMesh</code>, <code>createVerticesOfQuad</code> and the rest of the per-bone drawing methods, <code>reRender</code>, <code>checkAndRefreshBuffer</code> and the <code>Dynamic*Renderer</code> classes no longer exist. What they were used for: a bone's texture or colour is a <a href="bones.html">bone override</a> (colour and texture, per bone, frame-scoped if you like); a renderer that tints bones itself overrides <code>customBoneVisuals</code> (see <code>DyeableStrutArmorRenderer</code>); something drawn on a bone (an item in a block's slot) is drawn in <code>renderAttachments</code>, with <code>boneMatrixAtPivot(animatable, model, bone)</code> multiplied onto the stack. Glowing-entity outlines of Strut models are not specially supported.</td></tr>
+</table>
+
+<h2 id="map">Complete rename map</h2>
+<p>Every renamed identifier, generated from the change itself. Names in test code are omitted.</p>
+<div class="table-wrap">
+<table>
+	<tr><th>GeckoLib</th><th>Strut</th></tr>
+	<tr><td><code>AutoGlowingGeoLayer</code></td><td><code>AutoGlowingStrutLayer</code></td></tr>
+	<tr><td><code>BakedGeoModel</code></td><td><code>BakedStrutModel</code></td></tr>
+	<tr><td><code>BlockAndItemGeoLayer</code></td><td><em>removed</em>: use <code>entity.attachments()</code></td></tr>
+	<tr><td><code>BoneFilterGeoLayer</code></td><td><code>BoneFilterStrutLayer</code></td></tr>
+	<tr><td><code>DefaultedBlockGeoModel</code></td><td><code>DefaultedBlockStrutModel</code></td></tr>
+	<tr><td><code>DefaultedEntityGeoModel</code></td><td><code>DefaultedEntityStrutModel</code></td></tr>
+	<tr><td><code>DefaultedGeoModel</code></td><td><code>DefaultedStrutModel</code></td></tr>
+	<tr><td><code>DefaultedItemGeoModel</code></td><td><code>DefaultedItemStrutModel</code></td></tr>
+	<tr><td><code>DeferredGeoRenderProvider</code></td><td><code>DeferredStrutRenderProvider</code></td></tr>
+	<tr><td><code>DyeableGeoArmorRenderer</code></td><td><code>DyeableStrutArmorRenderer</code></td></tr>
+	<tr><td><code>DynamicGeoBlockRenderer</code>, <code>DynamicGeoEntityRenderer</code>, <code>DynamicGeoItemRenderer</code></td><td>removed: they were hooks of the CPU render path (see below)</td></tr>
+	<tr><td><code>FakeGeoAnimatable</code></td><td><code>FakeStrutAnimatable</code></td></tr>
+	<tr><td><code>FakeGeoEntity</code></td><td><code>FakeStrutEntity</code></td></tr>
+	<tr><td><code>FastBoneFilterGeoLayer</code></td><td><code>FastBoneFilterStrutLayer</code></td></tr>
+	<tr><td><code>GeoAbstractTexture</code></td><td><code>StrutAbstractTexture</code></td></tr>
+	<tr><td><code>GeoAnimatable</code></td><td><code>StrutAnimatable</code></td></tr>
+	<tr><td><code>GeoAnimatables</code></td><td><code>StrutAnimatables</code></td></tr>
+	<tr><td><code>GeoArmature</code></td><td><code>StrutArmature</code></td></tr>
+	<tr><td><code>GeoArmatureBones</code></td><td><code>StrutArmatureBones</code></td></tr>
+	<tr><td><code>GeoArmor</code></td><td><code>StrutArmor</code></td></tr>
+	<tr><td><code>GeoArmorRenderer</code></td><td><code>StrutArmorRenderer</code></td></tr>
+	<tr><td><code>GeoBlock</code></td><td><code>StrutBlock</code></td></tr>
+	<tr><td><code>GeoBlockEntity</code></td><td><code>StrutBlockEntity</code></td></tr>
+	<tr><td><code>GeoBlockRenderer</code></td><td><code>StrutBlockRenderer</code></td></tr>
+	<tr><td><code>GeoBone</code></td><td><code>GroupBoneDefinition</code> (shared, immutable) and <code>GroupBoneHandle</code> (per instance, mutable)</td></tr>
+	<tr><td><code>GeoCube</code></td><td><code>StrutCube</code></td></tr>
+	<tr><td><code>GeoCubes</code></td><td><code>StrutCubes</code></td></tr>
+	<tr><td><code>GeoEntity</code></td><td><code>StrutEntity</code></td></tr>
+	<tr><td><code>GeoEntityRenderer</code></td><td><code>StrutEntityRenderer</code></td></tr>
+	<tr><td><code>GeoGlowingTextureMeta</code></td><td><code>StrutGlowingTextureMeta</code></td></tr>
+	<tr><td><code>GeoItem</code></td><td><code>StrutItem</code></td></tr>
+	<tr><td><code>GeoItemRenderer</code></td><td><code>StrutItemRenderer</code></td></tr>
+	<tr><td><code>GeoItems</code></td><td><code>StrutItems</code></td></tr>
+	<tr><td><code>GeoMesh</code></td><td><code>StrutMesh</code></td></tr>
+	<tr><td><code>GeoModel</code></td><td><code>StrutModel</code></td></tr>
+	<tr><td><code>GeoObjectRenderer</code></td><td><code>StrutObjectRenderer</code></td></tr>
+	<tr><td><code>GeoPoly</code></td><td><code>StrutPoly</code></td></tr>
+	<tr><td><code>GeoQuad</code></td><td><code>StrutQuad</code></td></tr>
+	<tr><td><code>GeoRenderEvent</code></td><td><code>StrutRenderEvent</code></td></tr>
+	<tr><td><code>GeoRenderLayer</code></td><td><em>removed</em>: use <code>entity.overrides()</code> and <code>entity.attachments()</code></td></tr>
+	<tr><td><code>GeoRenderProvider</code></td><td><code>StrutRenderProvider</code></td></tr>
+	<tr><td><code>GeoRenderer</code></td><td><code>StrutRenderer</code></td></tr>
+	<tr><td><code>GeoReplacedEntity</code></td><td><code>StrutReplacedEntity</code></td></tr>
+	<tr><td><code>GeoReplacedEntityRenderer</code></td><td><code>StrutReplacedEntityRenderer</code></td></tr>
+	<tr><td><code>GeoSkin</code></td><td><code>StrutSkin</code></td></tr>
+	<tr><td><code>GeoTexture</code></td><td><code>StrutTexture</code></td></tr>
+	<tr><td><code>GeoVertex</code></td><td><code>StrutVertex</code></td></tr>
+	<tr><td><code>SingletonGeoAnimatable</code></td><td><code>SingletonStrutAnimatable</code></td></tr>
+	<tr><td><code>StatelessGeoBlockEntity</code></td><td><code>StatelessStrutBlockEntity</code></td></tr>
+	<tr><td><code>StatelessGeoEntity</code></td><td><code>StatelessStrutEntity</code></td></tr>
+	<tr><td><code>StatelessGeoObject</code></td><td><code>StatelessStrutObject</code></td></tr>
+	<tr><td><code>StatelessGeoReplacedEntity</code></td><td><code>StatelessStrutReplacedEntity</code></td></tr>
+	<tr><td><code>StatelessGeoSingletonAnimatable</code></td><td><code>StatelessStrutSingletonAnimatable</code></td></tr>
+	<tr><td><code>StatelessSingletonGeoAnimatable</code></td><td><code>StatelessSingletonStrutAnimatable</code></td></tr>
+	<tr><td><code>constructGeoModel</code></td><td><code>constructStrutModel</code></td></tr>
+	<tr><td><code>createGeoRenderer</code></td><td><code>createStrutRenderer</code></td></tr>
+	<tr><td><code>geoArmorRenderer</code></td><td><code>strutArmorRenderer</code></td></tr>
+	<tr><td><code>geoEntity</code></td><td><code>strutEntity</code></td></tr>
+	<tr><td><code>geoEntityDefaultsToServer</code></td><td><code>strutEntityDefaultsToServer</code></td></tr>
+	<tr><td><code>geoItem</code></td><td><code>strutItem</code></td></tr>
+	<tr><td><code>geoItemRenderer</code></td><td><code>strutItemRenderer</code></td></tr>
+	<tr><td><code>geoModel</code></td><td><code>strutModel</code></td></tr>
+	<tr><td><code>geoRenderer</code></td><td><code>strutRenderer</code></td></tr>
+	<tr><td><code>getGeoArmorRenderer</code></td><td><code>getStrutArmorRenderer</code></td></tr>
+	<tr><td><code>getGeoItemRenderer</code></td><td><code>getStrutItemRenderer</code></td></tr>
+	<tr><td><code>getGeoModel</code></td><td><code>getStrutModel</code></td></tr>
+	<tr><td><code>getGeoModelForArmor</code></td><td><code>getStrutModelForArmor</code></td></tr>
+	<tr><td><code>getGeoModelForBlock</code></td><td><code>getStrutModelForBlock</code></td></tr>
+	<tr><td><code>getGeoModelForEntity</code></td><td><code>getStrutModelForEntity</code></td></tr>
+	<tr><td><code>getGeoModelForEntityType</code></td><td><code>getStrutModelForEntityType</code></td></tr>
+	<tr><td><code>getGeoModelForItem</code></td><td><code>getStrutModelForItem</code></td></tr>
+	<tr><td><code>nonGeoEntityDefaultsToClientCosmetic</code></td><td><code>nonStrutEntityDefaultsToClientCosmetic</code></td></tr>
+	<tr><td><code>registerGeoBone</code></td><td><code>registerStrutBone</code></td></tr>
+	<tr><td><code>tryRenderGeoArmorPiece</code></td><td><code>tryRenderStrutArmorPiece</code></td></tr>
+</table>
+</div>
+
+<footer>Strut documentation. GeckoLib is by Gecko, Eliot, AzureDoom, DerToaster, Tslat and Witixin, used under the MIT License. See <a href="about.html">About and credits</a>.</footer>
+</main>
+</div>
+</body>
+</html>

@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rendering and performance - Strut docs</title>
+<link rel="stylesheet" href="assets/style.css">
+<script src="assets/docs.js" defer></script>
+</head>
+<body>
+<div class="layout">
+<main>
+<h1>Rendering and performance</h1>
+<p class="lead">How Strut draws, how it behaves under shader packs, and how to read the F9 overlay.</p>
+
+<h2 id="paths">The two render paths</h2>
+<p>Strut poses and draws models on the <strong>GPU</strong>: entities that share a model and a texture are drawn together in one instanced call, with bone matrices computed on the graphics card. This is what lets a hundred skinned characters cost a few draw calls instead of thousands. The GPU is the only path: entities, block entities, held and dropped items, worn armour and the models worn by another (armour, a hat) are all drawn by it, in the world, in a screen and under a shader pack. There is no CPU render path to fall back to, so a computer that cannot run it (OpenGL 4.3 with shader storage buffers) draws no Strut models.</p>
+
+<h2 id="shaders">Shader packs (Iris)</h2>
+<p>With Iris and a shader pack active, Strut draws through <em>the pack's own programs</em> with the pack's own vertex format, so entities are lit, shaded, and post-processed like any other entity. Nothing to configure and no toggle. Entities also cast shadows, because Strut draws them again into the shadow map from the sun's point of view, inside Iris's own shadow pass.</p>
+<ul>
+	<li>Per-bone <em>texture</em> overrides are not redrawn in the shadow pass (they change colour, not silhouette).</li>
+	<li>The F9 overlay counts each entity twice under Iris: once for the main pass and once for the shadow pass. That is correct.</li>
+	<li>If a shadow flush is ever missed, the shadows of that frame are lost and the overlay says so (<em>shadow flush unreliable</em>); the entities are still drawn.</li>
+</ul>
+
+<h2 id="translucency">Translucency and overlays</h2>
+<p>Models draw cutout by default: opaque, with pixels below a small alpha discarded. Three things change that, all working the same with and without a shader pack.</p>
+<p><strong>A translucent model.</strong> Override these on your model. <code>renderMode</code> blends the whole model after everything opaque; <code>shadingMode</code> chooses how the model is shaded by the way its surfaces face (<a href="#shading">below</a>), <code>FLAT</code> for none; <code>translucentDepthBias</code> and <code>translucentCullsBackFaces</code> tune the blended draws.</p>
+<pre class="sample" data-sample="render-mode"><code>@Override
+public RenderMode renderMode(HeroEntity creature) {
+	return RenderMode.TRANSLUCENT;                 // the whole model blends, after everything opaque
+}
+
+@Override
+public ShadingMode shadingMode(HeroEntity creature) {
+	return ShadingMode.FLAT;                        // no shading by direction; the world's own light still applies
+}
+
+@Override
+public DepthBias translucentDepthBias(HeroEntity creature) {
+	return new DepthBias(-1f, -2f);                 // pull translucent bones and overlays towards the camera; not the model itself
+}
+
+@Override
+public boolean translucentCullsBackFaces(HeroEntity creature) {
+	return true;                                    // hide a closed cube's inside faces; a one-sided plane vanishes from behind
+}</code></pre>
+<p><strong>Per-bone layers.</strong> On an opaque model, flag one bone translucent, or draw a second texture over a bone. Both are bone overrides, so they inherit down the tree, a child can opt out, and calling them on the client makes them this viewer's own.</p>
+<pre class="sample" data-sample="bone-layers"><code>// A model that is opaque by default, with one bone drawn blended
+creature.overrides().setTranslucent("blush", true);
+
+// A second texture over a bone, translucent, on top of its own. Layers 0 to 3, a higher layer draws later
+creature.overrides().setOverlay("head", 0, freckles);
+
+// On the client the same calls are this viewer's own, never sent anywhere: a skin, a player's setting
+creature.overrides().setTexture("head", skin);
+creature.overrides().clearOverlay("head", 0);</code></pre>
+<ul>
+	<li><strong>Opaque and see-through pixels are drawn apart.</strong> A translucent model's opaque pixels (alpha 255 after the bone and instance colours) are drawn first and hide what is behind them; its see-through pixels then blend over that, and of those only the nearest surface shows. So a shell of 60% alpha over an opaque core shows the core through it, a head does not show its own back faces through its front (turn on <code>translucentCullsBackFaces</code> for a closed shell whose texture is see-through on both sides), and a see-through bone behind a nearer see-through one is hidden, not blended. Under a shader pack the pack's own translucent blending is used instead.</li>
+	<li><strong>Colour overrides carry alpha.</strong> A bone colour with alpha below 255 makes that bone see-through when it is drawn blended.</li>
+	<li><strong>Depth bias.</strong> Translucent bones and overlays sit on geometry that is already drawn (a blush on a snout, a skin overlay on its bone), so they are pulled slightly towards the camera to win the tie. It is <em>not</em> applied to a translucent model's own draw, where it would pull neighbouring quads apart and show as seams. The default suits most models; tune it if a layer flickers or floats.</li>
+	<li><strong>Shadows.</strong> A translucent model or bone still casts a shadow, as if it were cutout. Overlays and per-bone texture swaps do not affect the shadow.</li>
+	<li><strong>No sorting between entities.</strong> Two overlapping translucent entities blend in the order they were submitted, as in vanilla.</li>
+</ul>
+
+<h2 id="shading">Shading</h2>
+<p>How a model is shaded by the way its surfaces face is a choice of the model, <code>StrutModel#shadingMode(animatable)</code>:</p>
+<ul>
+<li><code>SOFT</code> (the default): the light is wrapped round the surface and tinted from the sky side to the ground side, in a range of 0.55 to 1, so no face goes dark and the many small cubes and meshes of a character blend.</li>
+<li><code>VANILLA</code>: the game's own entity shading, two directional lights over a base of 0.4.</li>
+<li><code>TOON</code>: an anime look on <code>SOFT</code>'s light. The shadow is a deeper, more saturated and slightly cool version of the texture's own colour (not the same colour darker), with a middle tone, soft edges between the tones, and a thin soft rim of light at the lit outline, and the world's own light (block and sky light) in five steps too, so the model steps down as it goes into shade or the night comes.</li>
+<li><code>FLAT</code>: no shading by direction, every surface lit alike. The world's own light still applies.</li>
+</ul>
+<p><code>SOFT</code> and <code>TOON</code> are lit by the light that is really there: the sun by day and the moon by night (through what is above the model), and the nearest torch or lamp, from the way the block light rises around it. The side of a character facing a torch is its lit side, in the open the sun's side is, and in a dim place the model is flatter. A model drawn into a screen, or under a shader pack, has no such light and uses fixed ones.</p>
+<p>The world's own light (block and sky light) darkens the model the same way in every mode but <code>TOON</code>, which steps it. The faces of a flat cube (a plane or a card, with two faces on one plane) are lit by the side the eye is on, so the two look alike. Under a shader pack the pack lights the model and the mode has no effect.</p>
+
+<p>A mod can change the shader itself, add coloured lights and run code around the draw: see <a href="render-hooks.html">Changing the render pipeline</a>.</p>
+
+<h2 id="lod">Animation level of detail</h2>
+<p>Animations are evaluated less often the farther an entity is from the camera. It affects only how often a pose is recomputed, never server-side events. To keep an animatable frame-exact at any distance, override <code>useAnimationLod()</code> to return <code>false</code>.</p>
+
+<h2 id="f9">The F9 overlay</h2>
+<p>Press <kbd>F9</kbd> to toggle. Every line is a total for the last completed frame unless it says <em>cumulative</em>.</p>
+<table>
+	<tr><th>Line</th><th>Meaning</th></tr>
+	<tr><td><code>Iris: active=&hellip;, shadow flush unreliable=&hellip;</code></td><td>Whether a shader pack is driving Strut's Iris path, and whether the safety fallback has tripped.</td></tr>
+	<tr><td><code>events fired: server N / client N, unbound keys, capped sweeps, binding sets</code></td><td>Cumulative since launch. Compare before and after an action to see events fire. <em>Unbound keys</em> are sound cues no binding defines.</td></tr>
+	<tr><td><code>asset sync: &hellip;</code></td><td>Whether server assets are active, how many files, and what the last join had to download.</td></tr>
+	<tr><td><code>shadow pass: submitted, flushes, instances drawn, skipped, pose failed</code></td><td>The shadow pass stage by stage: entities queued for the shadow map, flushes that ran, instances actually drawn, draws skipped because the pack supplied no program, and pose passes that failed. A missing shadow shows up as the stage where the numbers stop matching.</td></tr>
+	<tr><td><code>GPU instances drawn</code>, <code>GPU draw calls</code>, <code>Iris GPU draw calls</code></td><td>The GPU path's work. Instances count entities; draw calls count batches.</td></tr>
+	<tr><td><code>blended: model instances, translucent bones, overlays</code></td><td>The blended passes' work: entities drawn as a translucent model, translucent bone ranges, and overlay ranges. All zero when nothing uses translucency.</td></tr>
+	<tr><td><code>animation</code>, <code>animations evaluated / skipped (LOD)</code></td><td>Animation cost, and how many were skipped by level of detail.</td></tr>
+	<tr><td><code>submission</code>, <code>gpu flush (CPU)</code>, <code>gpu draw (GPU)</code></td><td>CPU time spent submitting and flushing, and GPU time spent drawing, in milliseconds.</td></tr>
+	<tr><td><code>render-thread alloc</code></td><td>Memory allocated on the render thread per frame. Steady state should be small.</td></tr>
+</table>
+
+<h2 id="shadow-log">When a shadow is missing</h2>
+<p>Read the <em>shadow pass</em> line as a funnel:</p>
+<ul>
+	<li><strong>submitted is 0:</strong> nothing reached the shadow queue.</li>
+	<li><strong>submitted above 0 and flushes 0:</strong> the flush point is not being hit.</li>
+	<li><strong>instances drawn 0 and skipped above 0:</strong> the pack supplied no shadow program for entities.</li>
+	<li><strong>pose failed above 0:</strong> a pose pass failed.</li>
+	<li><strong>submitted equals drawn:</strong> the draws happen, so look at the pack and at GL state. The first shadow flushes also write the GL state they found to <code>latest.log</code> as <code>[Strut shadow]</code> lines.</li>
+</ul>
+
+<footer>Strut documentation.</footer>
+</main>
+</div>
+</body>
+</html>

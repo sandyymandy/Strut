@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Armour - Strut docs</title>
+<link rel="stylesheet" href="assets/style.css">
+<script src="assets/docs.js" defer></script>
+</head>
+<body>
+<div class="layout">
+<main>
+<h1>Armour for Strut models</h1>
+<p class="lead">One model for each slot, worn by any Strut-drawn entity or player body, worked out from the equipment each client already sees.</p>
+
+<p><em>Status: the core, trims, overlay, glint, animal armour, bone maps and fits (wearer profiles, sets, looks, atlas columns, dye tint, covers, the synced hidden flags). Strut does not draw a player's cape or elytra, see <code>docs-internal/ARMOUR_PLAN.md</code>. It has not been tried in a running game yet.</em></p>
+
+<h2 id="idea">The idea</h2>
+<p>Armour is not part of the wearer's model. Each slot (head, chest, legs, feet) is a model of its own, a <a href="entities.html#model-attachments">worn model</a> bound to the wearer's bones by name, so it follows every animation and physics bone of the wearer. One set therefore fits the bare and the dressed model of a character, and every character built on the same skeleton. Make a slot model in Blockbench on top of the wearer's skeleton (same bone names and pivots) and keep only the part that is worn: in the plugin (4.4.0) set <strong>Armour slot</strong> on the groups that hold each piece and <strong>Hidden by slot</strong> on the wearer's groups an armour slot hides (the pouches under a chestplate), then use <strong>File &gt; Export &gt; Export Armour Slot Model: &lt;slot&gt; (marked groups)</strong> for each slot, which writes only their geometry and keeps the groups above them empty, and <strong>Export Armour Wearer Profile (JSON)</strong>, which writes the profile (the armour set and what each slot hides) from the marks. (<strong>Export Armour Slot Model (Binary)</strong> exports the bones you have selected in the outliner, with no marks: select the bones that hold the piece first, then pick its slot from the list and give the armour set; the file is named from the two.) <code>/strutarmour</code> in game says what each slot of the player (or the entity you look at) resolved to: the look, the model, the texture and what it hides.</p>
+
+<h2 id="files">The files</h2>
+<p>All under <code>assets/&lt;namespace&gt;/strut/armour/</code>, in a resource pack, so a pack can add or replace any of them. The id of each is <code>&lt;namespace&gt;:&lt;path&gt;</code>.</p>
+
+<h3>A set: <code>sets/creature.json</code></h3>
+<pre><code>{
+  "texture": "mymod:textures/armor/armor.png",
+  "texture_size": [4096, 4096],
+  "column": [72, 0]
+}</code></pre>
+<p>The texture is an atlas of materials: <code>column</code> is the size of one cell in pixels, and a look picks the cell, which becomes the UV offset the worn model is drawn with. This set has no models, so it is a template for others to extend.</p>
+
+<h3>A character's set: <code>sets/ava.json</code></h3>
+<pre><code>{ "extends": "mymod:creature" }</code></pre>
+<p>The slot models are the files of a folder, named for the slot: <code>strut/models/armour/ava/head.strutmodel</code>, <code>chest</code>, <code>legs</code>, <code>feet</code> (and <code>body</code> for animal armour). The folder is named after the set file; <code>"models": "mymod:armour/ava_v2"</code> names another one. A set that extends another says only what differs, so the texture and atlas come from <code>creature</code>; a <code>"slots"</code> object still names a model one by one and wins over the file of the folder.</p>
+
+<h3>Checked when the game starts</h3>
+<p>The armour files are checked every time resources load, and a mistake stops the game with one message that lists every problem and says which file to add: a registered wearer whose profile does not exist or names no <code>armour_set</code>, a wearer whose set has no models, a slot a wearer covers that its set has no model for, a model file named for a slot that does not exist (<code>head, chest, legs, feet, body</code> or one a wearer lists), a <code>models</code> folder with nothing in it, and sets that extend a missing set or each other.</p>
+
+<h3>A wearer profile: <code>wearers/creature.json</code></h3>
+<pre><code>{
+  "extends": "mymod:creature_base",
+  "armour_set": "mymod:creature",
+  "slots": { "chest": { "covers": ["pouchL", "pouchR"] }, "legs": { "covers": ["belly"] } }
+}</code></pre>
+<p>Which set the wearer wears (without <code>armour_set</code> it wears the set of the same name as the profile, so <code>wearers/ava.json</code> with just <code>"extends": "mymod:creature"</code> wears <code>sets/ava.json</code>), and which of its own bones a slot hides while it is worn. A profile may extend another and list only what differs (a slot it lists replaces the parent's for that slot).</p>
+
+<h3>Looks: <code>looks/materials.json</code></h3>
+<pre><code>{ "set": "mymod:creature", "match": { "materials": ["minecraft:diamond"] }, "column": 1 }
+{ "set": "mymod:creature", "match": { "materials": ["minecraft:leather"] }, "column": 6, "tint": "dye", "undyed": "#A06540" }
+{ "match": { "items": ["mymod:crown"] }, "model": "mymod:armour/crown", "texture": "mymod:textures/armour/crown.png" }
+{ "column": 0 }</code></pre>
+<p>How an item looks when worn. The more exactly a look names an item the more it wins: its id, then a tag, then its armour material, then a look that matches everything; a look for the wearer's set beats a general one of the same kind. Items are never matched by their names. A look can bring a model and texture of its own (a modded helmet with a crest), limit itself to <code>slots</code>, and tint by <code>"dye"</code>, <code>"none"</code> or a colour.</p>
+
+<h2 id="fitting">Models made on another skeleton</h2>
+<pre><code>{ "armour_set": "mymod:creature",
+  "bones": { "armorHead": "head", "armorBody": "upperBody" },
+  "fit": { "armorHead": { "offset": [0, 2, 0], "rotation": [0, 0, 0], "scale": 1.1 } } }</code></pre>
+<p>A slot model whose bones are not named as the wearer's (made for another rig, or by a modder who never saw it) gets a <code>bones</code> map in the wearer profile: the worn bone on the left follows the wearer's bone on the right. A <code>fit</code> moves, turns (degrees) or scales a worn bone from where the wearer's bone puts it, for a different proportion: offsets are in the units animations move bones in (sixteenths of a block), a single number scales every axis. Both are added to by a profile that extends this one. The worn model still has to share the wearer's rest pose where it matches.</p>
+
+<h2 id="trims">Trims (optional)</h2>
+<pre><code>"trims": { "texture": "mymod:textures/armour/trims/{pattern}.png", "colours": { "mymod:ruby": "#C01030" } }</code></pre>
+<p>Put this in a set to draw armour trims; a set without it has none. Each trim pattern is a texture with the UV layout of the slot models, transparent where there is no trim (<code>{pattern}</code> and <code>{namespace}</code> stand for the pattern's id). The trim is the slot's model drawn again, blended over the armour, in that texture and tinted by the trim material: the vanilla materials' colours are built in, <code>colours</code> changes or adds some. A wearer profile with <code>"trims": false</code> shows none even where its set has them, and so does anything that extends it.</p>
+
+<h2 id="overlay">Overlay and glint</h2>
+<pre><code>{ "match": { "materials": ["minecraft:leather"] }, "column": 6, "tint": "dye", "overlay_column": 8 }
+"glint": { "texture": "mymod:textures/armour/glint.png", "strength": 0.75, "repeat": 0.16 }</code></pre>
+<p>A look's <code>overlay_column</code> (and <code>overlay_row</code>) is a second cell of the atlas drawn over the first, never tinted: leather's buckles and stitching that dye does not colour. An enchanted piece shines with the game's armour glint by default: the glint texture scrolls over the slot model and is added to the armour (<code>strength</code> is how strongly, <code>repeat</code> how many times the texture repeats over 64 texels of the atlas, the size of the game's own armour sheet: the game's is 0.16, a coarse sheen; a higher number is a finer pattern). A set can change it with the object above or turn it off with <code>"glint": false</code>, and a wearer profile can turn it off for itself and what extends it with <code>"glint": false</code>. Under a shader pack the glint takes the pack's own translucent blending instead of being added.</p>
+
+<p>The glint is added only where the piece's own texture is opaque: the transparent texels of the atlas show no shine. (It is kept to them by an exact depth test against what the piece itself drew, so under a shader pack, where the glint is drawn by the pack's own program, it covers the whole model as before. <code>-Dstrut.glintMask=false</code> turns the test off.)</p>
+
+<h2 id="animals">Animal armour</h2>
+<pre><code>{ "slots": { "body": "mymod:armour/horse_body" }, "texture": "mymod:textures/armour/horse.png", "texture_size": [64, 64], "column": [16, 0] }</code></pre>
+<p>Horse, wolf and llama armour is a single slot, <code>body</code> (the game's body slot, which is also a llama's carpet). A set for an animal lists only that slot, a profile may give it <code>covers</code>, and the looks match horse armour by material or item as for any armour and a carpet by tag (<code>minecraft:wool_carpets</code>). The slot model is made on the animal's skeleton like any other.</p>
+
+<h2 id="wearers">Who wears it</h2>
+<pre><code>StrutArmour.wearer(MyEntities.CREATURE, Identifier.of("mymod", "creature"));   // an entity type
+PlayerBody.builder(id).armour(Identifier.of("mymod", "creature"))          // a player body</code></pre>
+<p>An entity that needs its own say implements <code>ArmourWearer</code>: <code>armourProfile()</code> (a custom creature with her own profile), <code>armourStack(slot)</code> for armour kept somewhere other than the game's equipment, and <code>extraSlots()</code> for slots of its own (a backpack). The game's own slots are read from the equipment every client already has, so nothing is sent.</p>
+
+<h2 id="hidden">Hiding armour</h2>
+<pre><code>StrutArmour.setHidden(entity, "chest", true);   // server: everyone who sees the entity, saved with it
+StrutArmour.isHidden(entity, "chest");          // either side</code></pre>
+<p>A slot that is hidden draws no piece and hides none of the bones it covers. A character's "show armour" button and a scene that strips her are the same call. The covers are low-priority overrides (priority -500), so a mod's own override on the same bone still wins.</p>
+
+<h2 id="limits">Limits</h2>
+<ul>
+<li>Worn models are drawn by the GPU path only, with the wearer: in the world, in shadows and on a menu doll (a doll is drawn at once in the screen's own view).</li>
+<li>The vanilla-biped armour of <code>StrutItem</code> armour (<code>StrutClient.armor</code>) is still drawn by its own renderer on vanilla biped wearers; it is not used on Strut wearers: give a look a model instead.</li>
+<li>A slot model cannot have an armature yet, and has no animation of its own: unmatched bones stay at rest.</li>
+<li>The trim, the overlay and the glint are each the slot model drawn again, blended: with the same depth as the armour under it, not drawn in shadows. A trim is a blended copy of the slot model, with the same depth as the armour under it, and is not drawn in shadows.</li>
+</ul>
+
+<footer>Strut documentation.</footer>
+</main>
+</div>
+</body>
+</html>
