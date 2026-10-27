@@ -60,7 +60,7 @@
 		var top = document.createElement("div");
 		top.className = "topbar";
 		top.innerHTML = '<button id="menu-toggle" type="button" aria-label="Menu">Menu</button>' +
-			'<a class="brand" href="index.html">Strut<span> docs</span></a><span class="spacer"></span>' +
+			'<a class="brand" href="index.html"><img class="logo" src="assets/icon.png" alt="" width="28" height="28"><span class="name">Strut</span><span class="sub"> docs</span></a><span class="spacer"></span>' +
 			'<button id="theme-toggle" type="button" aria-label="Toggle light or dark theme"></button>';
 		document.body.insertBefore(top, document.body.firstChild);
 

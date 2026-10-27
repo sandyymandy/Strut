@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Entities - Strut docs</title>
 <link rel="stylesheet" href="assets/style.css">
+<link rel="icon" type="image/png" href="assets/icon.png">
+<link rel="apple-touch-icon" href="assets/icon.png">
 <script src="assets/docs.js" defer></script>
 </head>
 <body>
@@ -55,9 +57,9 @@
 <pre class="sample" data-sample="client-entity-alt-texture"><code>StrutClient.entity(NIA, StrutModel.&lt;HeroEntity&gt;entity(Identifier.of("mymod", "nia")).withAltTexture(shared));</code></pre>
 <p>When the files do not follow the convention at all, build the model from ids, or from functions of the entity so the model can change with its state:</p>
 <pre class="sample" data-sample="model-builder"><code>return StrutModel.&lt;HeroEntity&gt;builder()
-		.model(creature -&gt; Identifier.of("mymod", "strut/models/dressed/" + creature.getName().getString() + ".strutmodel"))
+		.model(creature -&gt; Identifier.of("mymod", "strut/models/forested/" + creature.getName().getString() + ".strutmodel"))
 		.texture(creature -&gt; Identifier.of("mymod", "textures/entities/" + creature.getName().getString() + ".png"))
-		.animation(Identifier.of("mymod", "strut/animations/base/creature.strutanim"))
+		.animation(Identifier.of("mymod", "strut/animations/creature.strutanim"))
 		.build();</code></pre>
 <p>The builder refuses to <code>build()</code> unless the model, texture and animation are all set, and names the one that is missing.</p>
 

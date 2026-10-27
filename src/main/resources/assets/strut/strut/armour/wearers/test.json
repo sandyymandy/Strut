@@ -1,7 +1,0 @@
-{
-  "armour_set": "strut:test",
-  "slots": {
-    "chest": { "covers": ["pouchL", "pouchR"] },
-    "legs": { "covers": ["belly"] }
-  }
-}

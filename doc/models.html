@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Models and files - Strut docs</title>
 <link rel="stylesheet" href="assets/style.css">
+<link rel="icon" type="image/png" href="assets/icon.png">
+<link rel="apple-touch-icon" href="assets/icon.png">
 <script src="assets/docs.js" defer></script>
 </head>
 <body>
@@ -45,11 +47,11 @@
 	<tr><td><code>StrutModel.armor(id)</code></td><td>The armor convention.</td></tr>
 	<tr><td><code>.withAltModel(id)</code>, <code>.withAltTexture(id)</code>, <code>.withAltAnimations(id)</code></td><td>The same, with that one part taken from another id (with the same folder convention applied to it).</td></tr>
 </table>
-<p>When the files do not follow the convention, build the model from ids or from functions of the animatable. The functions run every time the game asks, so the model can depend on the entity's state (a dressed and an undressed model, for instance):</p>
+<p>When the files do not follow the convention, build the model from ids or from functions of the animatable. The functions run every time the game asks, so the model can depend on the entity's state or variant (an enchanted and a forested model, for instance):</p>
 <pre class="sample" data-sample="model-builder"><code>return StrutModel.&lt;HeroEntity&gt;builder()
-		.model(creature -&gt; Identifier.of("mymod", "strut/models/dressed/" + creature.getName().getString() + ".strutmodel"))
+		.model(creature -&gt; Identifier.of("mymod", "strut/models/forested/" + creature.getName().getString() + ".strutmodel"))
 		.texture(creature -&gt; Identifier.of("mymod", "textures/entities/" + creature.getName().getString() + ".png"))
-		.animation(Identifier.of("mymod", "strut/animations/base/creature.strutanim"))
+		.animation(Identifier.of("mymod", "strut/animations/creature.strutanim"))
 		.build();</code></pre>
 <p>Anything the builder does not cover (turning a head bone, custom bone handling, animation fallbacks) is still a subclass of <code>StrutModel</code>: override <code>getModelResource</code>, <code>getTextureResource</code> and <code>getAnimationResource</code>, plus whatever else you need.</p>
 

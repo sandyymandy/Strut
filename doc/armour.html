@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Armour - Strut docs</title>
 <link rel="stylesheet" href="assets/style.css">
+<link rel="icon" type="image/png" href="assets/icon.png">
+<link rel="apple-touch-icon" href="assets/icon.png">
 <script src="assets/docs.js" defer></script>
 </head>
 <body>
@@ -13,10 +15,10 @@
 <h1>Armour for Strut models</h1>
 <p class="lead">One model for each slot, worn by any Strut-drawn entity or player body, worked out from the equipment each client already sees.</p>
 
-<p><em>Status: the core, trims, overlay, glint, animal armour, bone maps and fits (wearer profiles, sets, looks, atlas columns, dye tint, covers, the synced hidden flags). Strut does not draw a player's cape or elytra, see <code>docs-internal/ARMOUR_PLAN.md</code>. It has not been tried in a running game yet.</em></p>
+<p>Included: the core, trims, overlay, glint, animal armour, bone maps and fits (wearer profiles, sets, looks, atlas columns, dye tint, covers, the synced hidden flags). Strut does not draw a player's cape or elytra.</p>
 
 <h2 id="idea">The idea</h2>
-<p>Armour is not part of the wearer's model. Each slot (head, chest, legs, feet) is a model of its own, a <a href="entities.html#model-attachments">worn model</a> bound to the wearer's bones by name, so it follows every animation and physics bone of the wearer. One set therefore fits the bare and the dressed model of a character, and every character built on the same skeleton. Make a slot model in Blockbench on top of the wearer's skeleton (same bone names and pivots) and keep only the part that is worn: in the plugin (4.4.0) set <strong>Armour slot</strong> on the groups that hold each piece and <strong>Hidden by slot</strong> on the wearer's groups an armour slot hides (the pouches under a chestplate), then use <strong>File &gt; Export &gt; Export Armour Slot Model: &lt;slot&gt; (marked groups)</strong> for each slot, which writes only their geometry and keeps the groups above them empty, and <strong>Export Armour Wearer Profile (JSON)</strong>, which writes the profile (the armour set and what each slot hides) from the marks. (<strong>Export Armour Slot Model (Binary)</strong> exports the bones you have selected in the outliner, with no marks: select the bones that hold the piece first, then pick its slot from the list and give the armour set; the file is named from the two.) <code>/strutarmour</code> in game says what each slot of the player (or the entity you look at) resolved to: the look, the model, the texture and what it hides.</p>
+<p>Armour is not part of the wearer's model. Each slot (head, chest, legs, feet) is a model of its own, a <a href="entities.html#model-attachments">worn model</a> bound to the wearer's bones by name, so it follows every animation and physics bone of the wearer. One set therefore fits two variant models such as an enchanted or a frosted variant model of a character, and every character built on the same skeleton. Make a slot model in Blockbench on top of the wearer's skeleton (same bone names and pivots) and keep only the part that is worn: in the plugin set <strong>Armour slot</strong> on the groups that hold each piece and <strong>Hidden by slot</strong> on the wearer's groups an armour slot hides (the pouches under a chestplate), then use <strong>File &gt; Export &gt; Export Armour Slot Model: &lt;slot&gt; (marked groups)</strong> for each slot, which writes only their geometry and keeps the groups above them empty, and <strong>Export Armour Wearer Profile (JSON)</strong>, which writes the profile (the armour set and what each slot hides) from the marks. (<strong>Export Armour Slot Model (Binary)</strong> exports the bones you have selected in the outliner, with no marks: select the bones that hold the piece first, then pick its slot from the list and give the armour set; the file is named from the two.) <code>/strutarmour</code> in game says what each slot of the player (or the entity you look at) resolved to: the look, the model, the texture and what it hides.</p>
 
 <h2 id="files">The files</h2>
 <p>All under <code>assets/&lt;namespace&gt;/strut/armour/</code>, in a resource pack, so a pack can add or replace any of them. The id of each is <code>&lt;namespace&gt;:&lt;path&gt;</code>.</p>

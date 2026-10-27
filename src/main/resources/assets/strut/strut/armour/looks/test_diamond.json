@@ -1,9 +1,0 @@
-{
-  "set": "strut:test",
-  "match": {
-    "materials": [
-      "minecraft:diamond"
-    ]
-  },
-  "column": 1
-}

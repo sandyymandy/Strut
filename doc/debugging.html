@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Commands and debugging - Strut docs</title>
 <link rel="stylesheet" href="assets/style.css">
+<link rel="icon" type="image/png" href="assets/icon.png">
+<link rel="apple-touch-icon" href="assets/icon.png">
 <script src="assets/docs.js" defer></script>
 </head>
 <body>
@@ -13,7 +15,7 @@
 <h1>Commands and debugging</h1>
 <p class="lead">How to see Strut working, and how to tell "did not run" from "ran and did nothing".</p>
 
-<p>Every command needs operator permission level 2. They work on a dedicated server and in single player.</p>
+<p>The server commands (<code>/strut ...</code>) need operator permission level 2 and work on a dedicated server and in single player. The client commands work in any world.</p>
 
 <h2 id="events">/strut events</h2>
 <table>
@@ -28,6 +30,14 @@
 	<tr><th>Command</th><th>Does</th></tr>
 	<tr><td><code>/strut assets status</code></td><td>What the server offers (files, size, manifest hash, whether assets are required), the counters, each player's sync in progress, and files skipped at the last reload with the reason.</td></tr>
 	<tr><td><code>/strut assets list</code></td><td>The first 40 offered files with size and a short hash.</td></tr>
+</table>
+
+<h2 id="client-commands">Client commands</h2>
+<table>
+	<tr><th>Command</th><th>Does</th></tr>
+	<tr><td><code>/strutarmour</code></td><td>What each armour slot of your player (or of the entity you look at) resolved to: the look, the model, the texture and what it hides. See <a href="armour.html">Armour</a>.</td></tr>
+	<tr><td><code>/strutwear &lt;model&gt; &lt;texture&gt;</code>, <code>status</code>, <code>clear</code></td><td>Puts a Strut model on your player to try a worn model (the model's id as the game loads it, such as <code>strut:strut/models/entity/test_dummy.strutmodel</code>). <code>status</code> says whether it is drawn and <code>clear</code> takes it off.</td></tr>
+	<tr><td><code>/strutphysics ...</code></td><td>The physics switches, the cursor tool and the test scenarios. See <a href="physics.html#testing">Physics</a>.</td></tr>
 </table>
 
 <h2 id="f9">F9</h2>

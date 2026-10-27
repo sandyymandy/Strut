@@ -1,34 +1,37 @@
 :root {
 	--bg: #ffffff;
-	--surface: #f5f6f8;
-	--surface-2: #eceef2;
-	--text: #1c1f26;
-	--muted: #5a6273;
-	--border: #d9dde5;
-	--accent: #6b3fd4;
-	--accent-soft: #efe9fc;
-	--code-bg: #f3f4f7;
-	--code-text: #232733;
+	--surface: #faf7fd;
+	--surface-2: #f2eaf9;
+	--text: #1d1828;
+	--muted: #5d5670;
+	--border: #e4daef;
+	--accent: #8008e0;
+	--accent-2: #e830c8;
+	--accent-soft: #f6e8fd;
+	--code-bg: #f6f2fa;
+	--code-text: #2a2236;
 	--warn: #9a5b00;
 	--warn-bg: #fff4dc;
 	--note-bg: #e9f1ff;
 	--note: #1f4fa8;
+	--gradient: linear-gradient(120deg, #8008e0, #e830c8);
 	--sidebar-w: 270px;
 	--content-w: 860px;
 	color-scheme: light;
 }
 
 :root[data-theme="dark"] {
-	--bg: #14161b;
-	--surface: #1b1e25;
-	--surface-2: #232733;
-	--text: #e6e8ee;
-	--muted: #9aa3b5;
-	--border: #2d3240;
-	--accent: #a58bff;
-	--accent-soft: #2a2444;
-	--code-bg: #1d212b;
-	--code-text: #dfe3ee;
+	--bg: #14101b;
+	--surface: #1c1626;
+	--surface-2: #271e36;
+	--text: #efe9f7;
+	--muted: #ab9fc3;
+	--border: #35294b;
+	--accent: #c76bff;
+	--accent-2: #ff5fd8;
+	--accent-soft: #2f1a44;
+	--code-bg: #1e1829;
+	--code-text: #e8e0f4;
 	--warn: #e2a84a;
 	--warn-bg: #33291a;
 	--note-bg: #182338;
@@ -38,16 +41,17 @@
 
 @media (prefers-color-scheme: dark) {
 	:root:not([data-theme="light"]) {
-		--bg: #14161b;
-		--surface: #1b1e25;
-		--surface-2: #232733;
-		--text: #e6e8ee;
-		--muted: #9aa3b5;
-		--border: #2d3240;
-		--accent: #a58bff;
-		--accent-soft: #2a2444;
-		--code-bg: #1d212b;
-		--code-text: #dfe3ee;
+		--bg: #14101b;
+		--surface: #1c1626;
+		--surface-2: #271e36;
+		--text: #efe9f7;
+		--muted: #ab9fc3;
+		--border: #35294b;
+		--accent: #c76bff;
+		--accent-2: #ff5fd8;
+		--accent-soft: #2f1a44;
+		--code-bg: #1e1829;
+		--code-text: #e8e0f4;
 		--warn: #e2a84a;
 		--warn-bg: #33291a;
 		--note-bg: #182338;
@@ -57,6 +61,9 @@
 }
 
 * { box-sizing: border-box; }
+
+::selection { background: var(--accent-soft); color: var(--text); }
+:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
 
 html { scroll-behavior: smooth; scroll-padding-top: 4.5rem; }
 
@@ -82,8 +89,22 @@ a:hover { text-decoration: underline; }
 	border-bottom: 1px solid var(--border);
 }
 
-.topbar .brand { font-weight: 700; font-size: 1.1rem; color: var(--text); }
-.topbar .brand span { color: var(--accent); }
+/* a thin band in the colours of the logo under the bar */
+.topbar::after {
+	content: "";
+	position: absolute;
+	left: 0;
+	right: 0;
+	bottom: -1px;
+	height: 3px;
+	background: var(--gradient);
+}
+
+.topbar .brand { display: flex; align-items: center; gap: 0.5rem; font-weight: 700; font-size: 1.1rem; color: var(--text); }
+.topbar .brand:hover { text-decoration: none; }
+.topbar .brand .logo { display: block; width: 28px; height: 28px; }
+.topbar .brand .name { background: var(--gradient); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.topbar .brand .sub { margin-left: -0.35rem; color: var(--muted); font-weight: 600; }
 .topbar .spacer { flex: 1; }
 
 .topbar button {
@@ -141,12 +162,13 @@ a:hover { text-decoration: underline; }
 	color: var(--text);
 }
 .sidebar a:hover { background: var(--surface); text-decoration: none; }
-.sidebar a.current { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.sidebar a.current { background: var(--accent-soft); color: var(--accent); font-weight: 600; box-shadow: inset 0 0 0 1.5px var(--accent-2); }
 .sidebar a.hidden { display: none; }
 
 main { padding: 1.5rem 2rem 4rem; min-width: 0; }
 
 main h1 { font-size: 2rem; line-height: 1.25; margin: 0.2rem 0 0.4rem; }
+main h1::after { content: ""; display: block; width: 3.4rem; height: 4px; margin-top: 0.5rem; border-radius: 2px; background: var(--gradient); }
 main .lead { font-size: 1.15rem; color: var(--muted); margin-top: 0; }
 main h2 { margin-top: 2.4rem; padding-top: 0.4rem; border-top: 1px solid var(--border); font-size: 1.45rem; }
 main h3 { margin-top: 1.8rem; font-size: 1.15rem; }
@@ -201,7 +223,7 @@ th { background: var(--surface); }
 
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 0.9rem; margin: 1.2rem 0; }
 .card { display: block; padding: 0.9rem 1rem; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; color: var(--text); }
-.card:hover { border-color: var(--accent); text-decoration: none; }
+.card:hover { border-color: var(--accent-2); box-shadow: 0 0 0 1px var(--accent-2); text-decoration: none; }
 .card strong { display: block; color: var(--accent); margin-bottom: 0.2rem; }
 .card span { color: var(--muted); font-size: 0.92rem; }
 

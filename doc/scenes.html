@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Scenes - Strut docs</title>
 <link rel="stylesheet" href="assets/style.css">
+<link rel="icon" type="image/png" href="assets/icon.png">
+<link rel="apple-touch-icon" href="assets/icon.png">
 <script src="assets/docs.js" defer></script>
 </head>
 <body>
@@ -12,8 +14,6 @@
 <main>
 <h1>Scenes</h1>
 <p class="lead">Several entities, players with a body among them, animated together by the server on one clock: the base a mod builds a paired animation, a cutscene or a scene system on.</p>
-
-<p><em>Status: built and unit tested in the parts that need no running game (placement); not tried in a running game yet.</em></p>
 
 <h2 id="idea">The idea</h2>
 <p>Strut owns what every such system needs and none of what a scene means. A scene has <b>roles</b> (names you pick: <code>host</code>, <code>partner</code>), each filled by an entity placed at a spot in the scene's space. A <b>step</b> says which clip each role plays. Every clip of a step starts on the same game tick, so the clips stay in step for everyone however they are watching (the clock is the server's, see <a href="animations.html">playing animations</a>), and the next step replaces the one before on all roles at once. Which step follows, what an event does and how a scene is won are yours.</p>

@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Rendering and performance - Strut docs</title>
 <link rel="stylesheet" href="assets/style.css">
+<link rel="icon" type="image/png" href="assets/icon.png">
+<link rel="apple-touch-icon" href="assets/icon.png">
 <script src="assets/docs.js" defer></script>
 </head>
 <body>
@@ -13,7 +15,7 @@
 <h1>Rendering and performance</h1>
 <p class="lead">How Strut draws, how it behaves under shader packs, and how to read the F9 overlay.</p>
 
-<h2 id="paths">The two render paths</h2>
+<h2 id="paths">How Strut draws</h2>
 <p>Strut poses and draws models on the <strong>GPU</strong>: entities that share a model and a texture are drawn together in one instanced call, with bone matrices computed on the graphics card. This is what lets a hundred skinned characters cost a few draw calls instead of thousands. The GPU is the only path: entities, block entities, held and dropped items, worn armour and the models worn by another (armour, a hat) are all drawn by it, in the world, in a screen and under a shader pack. There is no CPU render path to fall back to, so a computer that cannot run it (OpenGL 4.3 with shader storage buffers) draws no Strut models.</p>
 
 <h2 id="shaders">Shader packs (Iris)</h2>
@@ -69,11 +71,11 @@ creature.overrides().clearOverlay("head", 0);</code></pre>
 <ul>
 <li><code>SOFT</code> (the default): the light is wrapped round the surface and tinted from the sky side to the ground side, in a range of 0.55 to 1, so no face goes dark and the many small cubes and meshes of a character blend.</li>
 <li><code>VANILLA</code>: the game's own entity shading, two directional lights over a base of 0.4.</li>
-<li><code>TOON</code>: an anime look on <code>SOFT</code>'s light. The shadow is a deeper, more saturated and slightly cool version of the texture's own colour (not the same colour darker), with a middle tone, soft edges between the tones, and a thin soft rim of light at the lit outline, and the world's own light (block and sky light) in five steps too, so the model steps down as it goes into shade or the night comes.</li>
+<li><code>TOON</code>: an anime look on <code>SOFT</code>'s light. The shadow is a deeper, more saturated and slightly cool version of the texture's own colour (not the same colour darker), with a middle tone, soft edges between the tones, and a thin soft rim of light at the lit outline, and the world's own light (block and sky light) kept above a floor, so a model in the dark is still readable.</li>
 <li><code>FLAT</code>: no shading by direction, every surface lit alike. The world's own light still applies.</li>
 </ul>
-<p><code>SOFT</code> and <code>TOON</code> are lit by the light that is really there: the sun by day and the moon by night (through what is above the model), and the nearest torch or lamp, from the way the block light rises around it. The side of a character facing a torch is its lit side, in the open the sun's side is, and in a dim place the model is flatter. A model drawn into a screen, or under a shader pack, has no such light and uses fixed ones.</p>
-<p>The world's own light (block and sky light) darkens the model the same way in every mode but <code>TOON</code>, which steps it. The faces of a flat cube (a plane or a card, with two faces on one plane) are lit by the side the eye is on, so the two look alike. Under a shader pack the pack lights the model and the mode has no effect.</p>
+<p><code>SOFT</code> and <code>TOON</code> are lit by the light that is really there: the sun by day and the moon by night (through what is above the model), and the blocks that glow round it. Up to four lights act at once, the sky's and the three strongest of the others (the weaker ones are added together into the last), each lighting the side of the model that faces it and tinting it with its colour (white unless a mod sets one, see <a href="render-hooks.html#lights">Coloured lights</a>). The invisible <code>light</code> block is not counted. The side of a character facing a torch is its lit side, in the open the sun's side is, and in a dim place the model is flatter. A model drawn into a screen, or under a shader pack, has no such light and uses fixed ones.</p>
+<p>The world's own light (block and sky light) darkens the model in every mode, and is eased over about a fifth of a second, so walking toward a torch brightens it smoothly instead of a level at a time. The faces of a flat cube (a plane or a card, with two faces on one plane) are lit by the side the eye is on, so the two look alike. Under a shader pack the pack lights the model and the mode has no effect.</p>
 
 <p>A mod can change the shader itself, add coloured lights and run code around the draw: see <a href="render-hooks.html">Changing the render pipeline</a>.</p>
 
@@ -93,6 +95,9 @@ creature.overrides().clearOverlay("head", 0);</code></pre>
 	<tr><td><code>animation</code>, <code>animations evaluated / skipped (LOD)</code></td><td>Animation cost, and how many were skipped by level of detail.</td></tr>
 	<tr><td><code>submission</code>, <code>gpu flush (CPU)</code>, <code>gpu draw (GPU)</code></td><td>CPU time spent submitting and flushing, and GPU time spent drawing, in milliseconds.</td></tr>
 	<tr><td><code>render-thread alloc</code></td><td>Memory allocated on the render thread per frame. Steady state should be small.</td></tr>
+	<tr><td><code>physics</code></td><td>Whether physics is on and at which quality, how many instances and spring bones are simulated, and the steps taken and their cost.</td></tr>
+	<tr><td><code>lights (you)</code>, <code>lights (last drawn)</code></td><td>The lights the shading is given, for your player and for the model queued last: each is <code>[direction |strength| #colour]</code>, in the order sky, strongest glowing block, the others together.</td></tr>
+	<tr><td><code>strongest block light</code></td><td>The glowing block that is the strongest light round the last model looked at, and where it is.</td></tr>
 </table>
 
 <h2 id="shadow-log">When a shadow is missing</h2>

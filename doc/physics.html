@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Physics - Strut docs</title>
 <link rel="stylesheet" href="assets/style.css">
+<link rel="icon" type="image/png" href="assets/icon.png">
+<link rel="apple-touch-icon" href="assets/icon.png">
 <script src="assets/docs.js" defer></script>
 </head>
 <body>
@@ -142,10 +144,10 @@ StrutPhysics.of(creature).ragdollOff();                   // fade out at once</c
 <p><code>/strutphysics</code> : <code>on|off</code>, <code>debug on|off</code>, <code>info</code>, <code>impulse &lt;bone&gt; x y z</code>, <code>distance &lt;blocks&gt;</code>, <code>quality low|medium|high</code>, <code>collide others|players|springs|cloth &lt;true|false&gt;</code>, <code>ragdoll limp|weak|stand|off</code>, <code>reset</code>, <code>tool</code>, <code>test &lt;scenario&gt;</code>.</p>
 
 <h2 id="testing">Testing it in game</h2>
-<p><code>/strutphysics tool</code> frees the cursor: left-drag a yellow dot to hold a chain particle, a spring mass, a cloth particle or a ragdoll joint; right-drag an entity to slide it (shift lifts it); scenario buttons load a ready-made setup for Strut's test dummy and say what to do and what you should see. The scenarios are <code>springs</code>, <code>chains</code>, <code>colliders</code>, <code>world</code>, <code>bodies</code>, <code>springworld</code>, <code>selfcollide</code>, <code>ragdoll</code>, <code>cloth</code> (a dress is put on the dummy), and <code>flesh</code> (two jelly balls). Every physics system ships one, and a test enforces it.</p>
+<p><code>/strutphysics tool</code> frees the cursor: left-drag a yellow dot to hold a chain particle, a spring mass, a cloth particle or a ragdoll joint; right-drag an entity to slide it (shift lifts it); scenario buttons load a ready-made setup for Strut's own test model (<code>strut:strut/models/entity/test_dummy</code>) and say what to do and what you should see. They are for developing Strut itself: they need an entity drawn with that model. The scenarios are <code>springs</code>, <code>chains</code>, <code>colliders</code>, <code>world</code>, <code>bodies</code>, <code>springworld</code>, <code>selfcollide</code>, <code>ragdoll</code>, <code>cloth</code> (a dress is put on the dummy), and <code>flesh</code> (two jelly balls). Every physics system ships one, and a test enforces it.</p>
 
 <h2 id="water">Water and lava</h2>
-<p>Chains, cloth, the ragdoll and spring bones react to the game's own liquids. A part that is in water floats a little (gravity is more than cancelled, so hair drifts up), is slowed, and is carried by a current; lava does the same more heavily. The liquid is read once a frame as the column of it at the entity, so a part reaching sideways out of that column is judged by the column's surface. It needs no setup in a model's physics file. It has its own switch: <code>/strutphysics water &lt;on|off&gt;</code>, the options screen, or the <code>water</code> key of the options file. This is separate from the thick liquid below.</p>
+<p>Chains, cloth, the ragdoll and spring bones react to the game's own liquids. A part that is in water floats a little (gravity is more than cancelled, so hair drifts up), is slowed, and is carried by a current; lava does the same more heavily. The liquid is read once a frame as the column of it at the entity, so a part reaching sideways out of that column is judged by the column's surface. It needs no setup in a model's physics file. It has its own switch: <code>/strutphysics water &lt;on|off&gt;</code>, the options screen, or the <code>water</code> key of the options file.</p>
 
 <h2 id="limits">Known limits</h2>
 <ul>

@@ -82,9 +82,9 @@ final class DocSamples {
 	static StrutModel<HeroEntity> modelBuilder() {
 		// docs:begin model-builder
 		return StrutModel.<HeroEntity>builder()
-				.model(creature -> Identifier.of("mymod", "strut/models/dressed/" + creature.getName().getString() + ".strutmodel"))
+				.model(creature -> Identifier.of("mymod", "strut/models/forested/" + creature.getName().getString() + ".strutmodel"))
 				.texture(creature -> Identifier.of("mymod", "textures/entities/" + creature.getName().getString() + ".png"))
-				.animation(Identifier.of("mymod", "strut/animations/base/creature.strutanim"))
+				.animation(Identifier.of("mymod", "strut/animations/creature.strutanim"))
 				.build();
 		// docs:end model-builder
 	}

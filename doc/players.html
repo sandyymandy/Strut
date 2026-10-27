@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Players with a Strut body - Strut docs</title>
 <link rel="stylesheet" href="assets/style.css">
+<link rel="icon" type="image/png" href="assets/icon.png">
+<link rel="apple-touch-icon" href="assets/icon.png">
 <script src="assets/docs.js" defer></script>
 </head>
 <body>
@@ -14,7 +16,7 @@
 <p class="lead">Draw a player as a Strut model, with no second entity beside them.</p>
 
 <p>A <strong>body</strong> is a Strut model, and the controllers that animate it, that a player can be given in place of the player model. The player stays the player: they move, collide, take damage and are tracked as before. What changes is how every client draws them. Bodies are for any mod: a morph, a disguise, a race, a shapeshift.</p>
-<p><em>Status: built are bodies, assignment, the renderer, bone overrides, server-driven clips and locomotion. First-person modes, held items, the scene anchor, menu previews and hitbox sizes are built too; armour is drawn by the armour system (<code>PlayerBody.Builder#armour</code>, see <a href="armour.html">armour</a>), and capes and elytras are not drawn on a body. It has not been tried in a running game yet.</em></p>
+<p>Included: bodies, assignment, the renderer, bone overrides, server-driven clips and locomotion, first-person modes, held items, the scene anchor, menu previews and hitbox sizes. Armour is drawn by the armour system (<code>PlayerBody.Builder#armour</code>, see <a href="armour.html">armour</a>), and capes and elytras are not drawn on a body.</p>
 
 <h2 id="register">Register a body</h2>
 <p>Register the same body on the server and on every client, from your mod initialiser (the common entrypoint runs on both):</p>
@@ -57,7 +59,7 @@
 <h2 id="anchor">Drawing the body somewhere else</h2>
 <pre><code>StrutPlayers.setAnchor(player, bedPosition, 90f);   // server: everyone sees the body there, facing 90 degrees
 StrutPlayers.clearAnchor(player);</code></pre>
-<p>For a scene on a bed or at a mark: the body is drawn at the anchor and faces the way it says, while the player stays where they are (their position, hitbox and what hits them do not change). In first person with an immersive body the camera goes with the body. The anchor lasts until it is cleared, or the player respawns or leaves. In a development environment, <code>/strut body anchor</code> puts your body three blocks ahead facing you and <code>/strut body unanchor</code> brings it back.</p>
+<p>For a scene on a bed or at a mark: the body is drawn at the anchor and faces the way it says, while the player stays where they are (their position, hitbox and what hits them do not change). In first person with an immersive body the camera goes with the body. The anchor lasts until it is cleared, or the player respawns or leaves.</p>
 
 <h2>One body, many characters: variants</h2>
 <p>A body is registered once and a player is given a <em>variant</em> of it (the string given to <code>StrutPlayers.setBody</code>). Anything that differs for a variant is given by a function, which is asked often (a hitbox every tick), so it should look something up:</p>
