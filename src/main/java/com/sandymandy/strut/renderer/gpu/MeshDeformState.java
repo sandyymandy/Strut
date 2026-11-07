@@ -17,6 +17,8 @@ public final class MeshDeformState {
 	public static int offsetBase;
 	public static int normalBase;
 	public static boolean hasNormals;
+	/** The table of what never changes for each flesh particle ({@code CageBindings}), on the binding point {@code CageGlsl.BINDING} */
+	public static int cageSsbo;
 
 	private MeshDeformState() {}
 }

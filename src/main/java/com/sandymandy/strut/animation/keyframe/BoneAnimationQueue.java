@@ -14,9 +14,37 @@ public record BoneAnimationQueue(PosableBone bone, AnimationPointQueue rotationX
 								 AnimationPointQueue positionZQueue, AnimationPointQueue scaleXQueue, AnimationPointQueue scaleYQueue,
 								 AnimationPointQueue scaleZQueue) {
 	public BoneAnimationQueue(PosableBone bone) {
-		this(bone, new AnimationPointQueue(), new AnimationPointQueue(), new AnimationPointQueue(),
-				new AnimationPointQueue(), new AnimationPointQueue(), new AnimationPointQueue(),
-				new AnimationPointQueue(), new AnimationPointQueue(), new AnimationPointQueue());
+		this(bone, null);
+	}
+
+	/** @param used Told when each of the nine queues is first added to, so a frame can empty just those */
+	public BoneAnimationQueue(PosableBone bone, AnimationPointQueue.Used used) {
+		this(bone, new AnimationPointQueue(used), new AnimationPointQueue(used), new AnimationPointQueue(used),
+				new AnimationPointQueue(used), new AnimationPointQueue(used), new AnimationPointQueue(used),
+				new AnimationPointQueue(used), new AnimationPointQueue(used), new AnimationPointQueue(used));
+	}
+
+	/** Whether no point waits in any of the nine queues: a bone no animation moved this frame */
+	public boolean isEmpty() {
+		return this.rotationXQueue.isEmpty() && this.rotationYQueue.isEmpty() && this.rotationZQueue.isEmpty()
+				&& this.positionXQueue.isEmpty() && this.positionYQueue.isEmpty() && this.positionZQueue.isEmpty()
+				&& this.scaleXQueue.isEmpty() && this.scaleYQueue.isEmpty() && this.scaleZQueue.isEmpty();
+	}
+
+	/** Empties the nine queues, for the next frame */
+	public void clear() {
+		if (isEmpty())
+			return;
+
+		this.rotationXQueue.clear();
+		this.rotationYQueue.clear();
+		this.rotationZQueue.clear();
+		this.positionXQueue.clear();
+		this.positionYQueue.clear();
+		this.positionZQueue.clear();
+		this.scaleXQueue.clear();
+		this.scaleYQueue.clear();
+		this.scaleZQueue.clear();
 	}
 
 	/**

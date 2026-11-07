@@ -150,6 +150,7 @@ public class BoneSnapshot {
 
 	public void startPosAnim() {
 		this.posAnimInProgress = true;
+		this.resting = false;
 	}
 
 	public void stopPosAnim(double tick) {
@@ -159,6 +160,7 @@ public class BoneSnapshot {
 
 	public void startRotAnim() {
 		this.rotAnimInProgress = true;
+		this.resting = false;
 	}
 
 	public void stopRotAnim(double tick) {
@@ -168,7 +170,22 @@ public class BoneSnapshot {
 
 	public void startScaleAnim() {
 		this.scaleAnimInProgress = true;
+		this.resting = false;
 	}
+
+	/**
+	 * Whether the animation's reset pass has brought the bone all the way back to its rest pose, with nothing animating it since: the pass leaves such a bone
+	 * alone until something writes it. Not copied with the snapshot
+	 */
+	public boolean isResting() {
+		return this.resting;
+	}
+
+	public void setResting(boolean resting) {
+		this.resting = resting;
+	}
+
+	private boolean resting;
 
 	public void stopScaleAnim(double tick) {
 		this.scaleAnimInProgress = false;

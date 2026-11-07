@@ -165,11 +165,11 @@ class ToolAndScenarioTest {
 				moved |= Math.abs(pose.getRotX(b) - animated.getRotX(b)) + Math.abs(pose.getRotY(b) - animated.getRotY(b)) + Math.abs(pose.getRotZ(b) - animated.getRotZ(b)) > 1e-3;
 			}
 
-			// cloth moves vertices, not bones
+			// cloth and flesh move vertices, not bones
 			double[] deformed = {0};
 
-			instance.clothOutputs((mesh, offsets) -> {
-				for (float o : offsets)
+			instance.clothDeforms((mesh, deform) -> {
+				for (float o : deform.cornerOffsets())
 					deformed[0] = Math.max(deformed[0], Math.abs(o));
 			});
 			moved |= deformed[0] > 1e-3;

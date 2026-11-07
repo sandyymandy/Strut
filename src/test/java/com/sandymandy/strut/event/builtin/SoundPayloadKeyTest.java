@@ -36,8 +36,8 @@ class SoundPayloadKeyTest {
 	@Test
 	@DisplayName("every real key from a consumer mod's scenes parses as a key")
 	void realKeysParse() {
-		for (String key : new String[] {"anal_startMSG1", "doggyintroMSG5", "lipsound", "pound", "bjiMSG11", "cowcreaturestartMSG0",
-				"carry_introMSG1", "missionary_slowMSG1", "bedRustle", "doggyMoan", "orgasm1"}) {
+		for (String key : new String[] {"walk_startMSG1", "danceintroMSG5", "voicesound", "strike", "hugMSG11", "cowcreaturestartMSG0",
+				"carry_introMSG1", "sway_slowMSG1", "rustle", "danceHum", "cheer1"}) {
 			SoundEventPayload payload = SoundEventPayload.parse(key);
 
 			assertEquals(key.toLowerCase(), payload.key(), key);
@@ -47,9 +47,9 @@ class SoundPayloadKeyTest {
 	@Test
 	@DisplayName("volume, pitch and locator follow a key just as they follow a sound")
 	void modifiersFollowAKey() {
-		SoundEventPayload payload = SoundEventPayload.parse("lipsound 0.5 1.5 head");
+		SoundEventPayload payload = SoundEventPayload.parse("voicesound 0.5 1.5 head");
 
-		assertEquals("lipsound", payload.key());
+		assertEquals("voicesound", payload.key());
 		assertEquals(0.5f, payload.volume());
 		assertEquals(1.5f, payload.pitch());
 		assertEquals("head", payload.locator());
@@ -58,8 +58,8 @@ class SoundPayloadKeyTest {
 	@Test
 	@DisplayName("a comma list is not a key - the old 'a, b' habit is an error, not two guessed cues")
 	void commaListsAreRejected() {
-		assertThrows(IllegalArgumentException.class, () -> SoundEventPayload.parse("lipsound, strike"));
-		assertThrows(IllegalArgumentException.class, () -> SoundEventPayload.parse("lipsound,"));
+		assertThrows(IllegalArgumentException.class, () -> SoundEventPayload.parse("voicesound, strike"));
+		assertThrows(IllegalArgumentException.class, () -> SoundEventPayload.parse("voicesound,"));
 	}
 
 	@Test

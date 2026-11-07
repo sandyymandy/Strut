@@ -18,8 +18,8 @@ import com.sandymandy.strut.physics.fluid.FluidSystem;
 import com.sandymandy.strut.physics.fluid.StrutFluids;
 
 /**
- * {@code /strutphysics fluid ...}: try the thick liquid out without an animation. {@code spray} and {@code burst} start in front of you, {@code bone} starts at
- * a bone of the entity you are looking at (the test dummy's {@code cock} bone is a good one), {@code clear} removes every particle and {@code info} says
+ * {@code /strutphysics fluid ...}: try the fluid out without an animation. {@code spray} and {@code burst} start in front of you, {@code bone} starts at
+ * a bone of the entity you are looking at (any bone name works), {@code clear} removes every particle and {@code info} says
  * what is going on
  */
 public final class FluidCommands {

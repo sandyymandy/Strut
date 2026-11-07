@@ -112,7 +112,7 @@ public final class ModelSdfs {
 	}
 
 	/** Gives a model its fields without a build, for a test */
-	static void put(BakedStrutModel model, ModelSdf fields) {
+	public static void put(BakedStrutModel model, ModelSdf fields) {
 		CACHE.put(model, fields);
 	}
 
@@ -145,7 +145,7 @@ public final class ModelSdfs {
 	}
 
 	/** Makes the fields of every bone of {@code model} now, on this thread */
-	static ModelSdf buildAll(BakedStrutModel model) {
+	public static ModelSdf buildAll(BakedStrutModel model) {
 		long start = System.nanoTime();
 		Map<String, MeshSdf> bones = new HashMap<>();
 		long nodes = 0;

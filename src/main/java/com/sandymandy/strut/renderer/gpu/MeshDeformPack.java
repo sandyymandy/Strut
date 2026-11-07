@@ -1,5 +1,6 @@
 package com.sandymandy.strut.renderer.gpu;
 
+import com.sandymandy.strut.animation.state.CageDeform;
 import com.sandymandy.strut.animation.state.MeshDeform;
 import com.sandymandy.strut.animation.state.ModelInstance;
 import com.sandymandy.strut.animation.state.ParticleDeform;
@@ -19,8 +20,10 @@ import java.util.function.IntFunction;
  * <ol>
  * <li>a table, one word for each instance and mesh ({@code instance * meshCount + mesh}): {@code -1} if that instance does not move that mesh (most meshes of most
  * instances: the table is small and the rest is only for what moves), else where its record starts and how it is read: {@code w >= 0} is a value for each
- * corner, starting at slot {@code w}; {@code w <= -2} is {@code -2 - w = slot * 2 + kind}, kind 0 a value for each welded particle (see
- * {@link com.sandymandy.strut.cache.object.MeshWeld}) starting at {@code slot}, kind 1 one rigid motion in three slots from {@code slot}</li>
+ * corner, starting at slot {@code w}; {@code w <= -2} is {@code -2 - w = slot * 4 + kind}, kind 0 a value for each welded particle (see
+ * {@link com.sandymandy.strut.cache.object.MeshWeld}) starting at {@code slot}, kind 1 one rigid motion in three slots from {@code slot}, kind 2 a flesh's
+ * cage (see {@link CageDeform}): a header slot (where the mesh's fixed per-particle table starts, and how many regions) and a block of
+ * {@link CageDeform#REGION_SLOTS} slots for each region</li>
  * <li>the offsets, a slot being four words (x, y, z, and a pad), meshes of all instances one after another. A particle's slot is its offset; a rigid mesh's three
  * slots are the rows of {@code A | b} of {@code offset = A * position + b}</li>
  * <li>the normals, in the same slots, only when some moved mesh has its own (x, y, z, and {@code 1}); a corner slot of a mesh without them has {@code 0} for the
@@ -42,6 +45,7 @@ public final class MeshDeformPack {
 	private int normalBase;
 	private int meshCount;
 	private boolean hasNormals;
+	private boolean hasCage;
 
 	/** How many slots a mesh's deformation takes in the pack, or 0 if it takes none (nothing, or an array of the wrong size) */
 	private static int slotsOf(StrutMesh mesh, @Nullable MeshDeform deform) {
@@ -53,6 +57,9 @@ public final class MeshDeformPack {
 
 		if (deform instanceof RigidDeform)
 			return RIGID_SLOTS;
+
+		if (deform instanceof CageDeform cage)
+			return 1 + cage.regions() * CageDeform.REGION_SLOTS;
 
 		return valid(mesh, deform.cornerOffsets()) != null ? mesh.polys().length * 4 : 0;
 	}
@@ -67,6 +74,7 @@ public final class MeshDeformPack {
 		int table = instanceCount * this.meshCount;
 		int entries = 0;
 		boolean normals = false;
+		boolean cages = false;
 
 		for (int i = 0; i < instanceCount; i++) {
 			ModelInstance instance = instances.apply(i);
@@ -82,7 +90,8 @@ public final class MeshDeformPack {
 					continue;
 
 				entries += slots;
-				normals |= deform instanceof ParticleDeform || deform instanceof RigidDeform || valid(mesh, deform.cornerNormals()) != null;
+				cages |= deform instanceof CageDeform;
+				normals |= deform instanceof ParticleDeform || deform instanceof RigidDeform || deform instanceof CageDeform || (!(deform instanceof CageDeform) && valid(mesh, deform.cornerNormals()) != null);
 			}
 		}
 
@@ -93,6 +102,7 @@ public final class MeshDeformPack {
 		this.data.clear();
 
 		this.hasNormals = normals;
+		this.hasCage = cages;
 		this.offsetBase = table;
 		this.normalBase = table + entries * 4;
 		this.words = table + entries * 4 * (normals ? 2 : 1);
@@ -118,12 +128,16 @@ public final class MeshDeformPack {
 				}
 
 				if (deform instanceof ParticleDeform particles) {
-					this.data.putInt(slot * 4, -2 - entry * 2);
+					this.data.putInt(slot * 4, -2 - entry * 4);
 					writeParticles(particles, entry);
 				}
 				else if (deform instanceof RigidDeform rigid) {
-					this.data.putInt(slot * 4, -2 - (entry * 2 + 1));
+					this.data.putInt(slot * 4, -2 - (entry * 4 + 1));
 					writeRigid(rigid, entry);
+				}
+				else if (deform instanceof CageDeform cage) {
+					this.data.putInt(slot * 4, -2 - (entry * 4 + 2));
+					writeCage(cage, entry);
 				}
 				else {
 					this.data.putInt(slot * 4, entry);
@@ -156,6 +170,22 @@ public final class MeshDeformPack {
 			this.data.putFloat(normalAt + 8, deltas[k * 3 + 2]);
 			this.data.putFloat(normalAt + 12, 1f);
 		}
+	}
+
+	/** The header (where the mesh's fixed table starts, how many regions), then each region's record */
+	private void writeCage(CageDeform cage, int entry) {
+		int header = (this.offsetBase + entry * 4) * 4;
+
+		this.data.putInt(header, cage.bindingBase());
+		this.data.putInt(header + 4, cage.regions());
+		this.data.putInt(header + 8, 0);
+		this.data.putInt(header + 12, 0);
+
+		float[] blocks = cage.blocks;
+		int at = (this.offsetBase + (entry + 1) * 4) * 4;
+
+		for (int i = 0; i < blocks.length; i++)
+			this.data.putFloat(at + i * 4, blocks[i]);
 	}
 
 	private void writeRigid(RigidDeform deform, int entry) {
@@ -222,6 +252,11 @@ public final class MeshDeformPack {
 	/** How many meshes the model has: the table's row length */
 	public int meshCount() {
 		return this.meshCount;
+	}
+
+	/** Whether any moved mesh is a flesh's cage, so the shader needs the table of what never changes */
+	public boolean hasCage() {
+		return this.hasCage;
 	}
 
 	/** Whether any moved mesh gave normals, so the normal part exists */

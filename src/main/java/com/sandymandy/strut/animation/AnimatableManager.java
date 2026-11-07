@@ -112,7 +112,21 @@ public class AnimatableManager<T extends StrutAnimatable> {
 
 	public void clearSnapshotCache() {
 		getBoneSnapshotCollection().clear();
+		this.snapshotsMadeFor = null;
+		this.snapshotsInOrder = null;
 	}
+
+	/** What the snapshots were last filled for (see {@code AnimationProcessor}), so a frame with the same bones does not check every one again */
+	@Nullable
+	Object snapshotsMadeFor;
+
+	/** The map {@link #snapshotsInOrder} was made from (a context-aware manager hands out one map for each context) */
+	@Nullable
+	Map<BoneKey, BoneSnapshot> snapshotsMadeFrom;
+
+	/** This manager's snapshots in the processor's order of bones, so a frame does not look each one up by name */
+	@Nullable
+	BoneSnapshot[] snapshotsInOrder;
 
 	public double getLastUpdateTime() {
 		return this.lastUpdateTime;

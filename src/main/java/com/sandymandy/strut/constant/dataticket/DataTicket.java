@@ -13,7 +13,11 @@ public class DataTicket<D> {
 	public DataTicket(String id, Class<? extends D> objectType) {
 		this.id = id;
 		this.objectType = objectType;
+		this.hash = Objects.hash(id, objectType);
 	}
+
+	// worked out once: a ticket is looked up in an animation state's data several times a frame for every model drawn
+	private final int hash;
 
 	public String id() {
 		return this.id;
@@ -25,7 +29,7 @@ public class DataTicket<D> {
 
 	@Override
 	public int hashCode() {
-		return Objects.hash(this.id, this.objectType);
+		return this.hash;
 	}
 
 	/**

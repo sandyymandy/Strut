@@ -58,4 +58,12 @@ public interface PosableBone {
 	void setScaleY(float value);
 
 	void setScaleZ(float value);
+
+	/** Whether the bone's position, rotation or scale was written since {@link #clearWritten}; true when the bone cannot tell */
+	default boolean writtenSinceReset() {
+		return true;
+	}
+
+	/** Says the animation's reset pass has dealt with the bone's last write */
+	default void clearWritten() {}
 }

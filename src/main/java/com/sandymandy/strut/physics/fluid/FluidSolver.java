@@ -7,7 +7,7 @@ import com.sandymandy.strut.physics.collision.ShapeGrid;
 import com.sandymandy.strut.physics.solver.SpringSolver;
 
 /**
- * A cloud of soft particles standing in for a thick liquid, stepped at a fixed time step like the rest of the module. Pure and allocation-free per step, so it
+ * A cloud of soft particles standing in for a viscous fluid, stepped at a fixed time step like the rest of the module. Pure and allocation-free per step, so it
  * is tested without a game
  * <p>
  * Not a full fluid simulation: the particles are soft balls. Two closer than {@link FluidParams#spacing()} push apart, two between that and
@@ -246,7 +246,7 @@ public final class FluidSolver {
 			collide(n, grid, contactRadius);
 		}
 
-		// near a surface a thick liquid clings, even when nothing pushes it into it
+		// near a surface a viscous fluid clings, even when nothing pushes it into it
 		cling(n, grid, contactRadius);
 
 		// what moved is the velocity; friction and the loss of the part heading into a surface are applied to it
@@ -271,7 +271,7 @@ public final class FluidSolver {
 					}
 				}
 
-				// the sliding that is left is slowed: a thick liquid clings
+				// the sliding that is left is slowed: a viscous fluid clings
 				float keep = 1f - p.friction();
 
 				ux *= keep;

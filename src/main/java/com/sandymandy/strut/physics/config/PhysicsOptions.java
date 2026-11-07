@@ -17,6 +17,8 @@ public final class PhysicsOptions {
 	private static volatile boolean playerCollision = true;
 	private static volatile boolean springWorldCollision = true;
 	private static volatile boolean cloth = true;
+	private static volatile boolean flesh = true;
+	private static volatile double fleshRange = 24.0;
 	private static volatile boolean fluid = true;
 	private static volatile boolean water = true;
 	private static volatile boolean meshColliders = true;
@@ -71,6 +73,20 @@ public final class PhysicsOptions {
 		return quality.boxes;
 	}
 
+	/** The distance beyond which a model's flesh rests (drawn as modelled), with the quality's scale applied */
+	public static double effectiveFleshRange() {
+		return Math.min(fleshRange, distanceLimit) * quality.range;
+	}
+
+	/** How far from the camera flesh runs, blocks: they cost the most of the parts of a model, and past this they are a few pixels */
+	public static double fleshRange() {
+		return fleshRange;
+	}
+
+	public static void fleshRange(double blocks) {
+		fleshRange = Math.max(4.0, blocks);
+	}
+
 	/** The distance beyond which a model is drawn as animated, with the quality's scale applied */
 	public static double effectiveRange() {
 		return distanceLimit * quality.range;
@@ -105,6 +121,15 @@ public final class PhysicsOptions {
 		cloth = value;
 	}
 
+	/** Whether flesh (the {@code flesh} section of a model's physics: a cage that swings and a surface that dents) runs */
+	public static boolean flesh() {
+		return flesh;
+	}
+
+	public static void flesh(boolean value) {
+		flesh = value;
+	}
+
 	/**
 	 * Whether a model's collision shapes are made from its real geometry (a signed distance field per bone, see {@link ModelSdfs}) rather than boxes and
 	 * capsules. It applies to the models loaded after it is changed (a resource reload, F3+T)
@@ -117,7 +142,7 @@ public final class PhysicsOptions {
 		meshColliders = value;
 	}
 
-	/** Whether the thick liquid ({@link StrutFluids}) runs: it has a pool of particles and a mesh to build, so it has its own switch */
+	/** Whether the fluid ({@link StrutFluids}) runs: it has a pool of particles and a mesh to build, so it has its own switch */
 	public static boolean fluid() {
 		return fluid;
 	}

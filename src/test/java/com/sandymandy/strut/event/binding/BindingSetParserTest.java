@@ -32,10 +32,10 @@ class BindingSetParserTest {
 	@Test
 	@DisplayName("fixed sounds, all of which play, are read in order")
 	void fixedSounds() {
-		BindingSet set = parse("{\"bindings\": {\"pound\": {\"sounds\": [\"mymod:misc.impact\", \"mymod:misc.bedrustle\"]}}}");
+		BindingSet set = parse("{\"bindings\": {\"strike\": {\"sounds\": [\"mymod:misc.impact\", \"mymod:misc.rustle\"]}}}");
 
-		assertEquals(List.of(Identifier.of("mymod", "misc.impact"), Identifier.of("mymod", "misc.bedrustle")),
-				set.get("pound").sounds());
+		assertEquals(List.of(Identifier.of("mymod", "misc.impact"), Identifier.of("mymod", "misc.rustle")),
+				set.get("strike").sounds());
 		assertTrue(this.warnings.isEmpty(), this.warnings.toString());
 	}
 
@@ -79,11 +79,11 @@ class BindingSetParserTest {
 	@Test
 	@DisplayName("keys are lower-cased, so a table and a clip that disagree on capitals still meet")
 	void keysAreLowerCased() {
-		BindingSet set = parse("{\"bindings\": {\"doggyFastMSG1\": {\"sounds\": [\"mymod:x\"]}}}");
+		BindingSet set = parse("{\"bindings\": {\"stepFastMSG1\": {\"sounds\": [\"mymod:x\"]}}}");
 
-		assertNotNull(set.get("doggyfastmsg1"));
-		assertNotNull(set.get("DOGGYFASTMSG1"), "lookup lower-cases too");
-		assertTrue(set.bindings().containsKey("doggyfastmsg1"));
+		assertNotNull(set.get("stepfastmsg1"));
+		assertNotNull(set.get("STEPFASTMSG1"), "lookup lower-cases too");
+		assertTrue(set.bindings().containsKey("stepfastmsg1"));
 	}
 
 	@Test
@@ -175,9 +175,9 @@ class BindingSetParserTest {
 	@Test
 	@DisplayName("a key that is empty of actions is kept - it is how a character says a cue is silent for her")
 	void emptyBindingIsKept() {
-		BindingSet set = parse("{\"bindings\": {\"pound\": {}}}");
+		BindingSet set = parse("{\"bindings\": {\"strike\": {}}}");
 
-		assertNotNull(set.get("pound"));
-		assertTrue(set.get("pound").isEmpty());
+		assertNotNull(set.get("strike"));
+		assertTrue(set.get("strike").isEmpty());
 	}
 }

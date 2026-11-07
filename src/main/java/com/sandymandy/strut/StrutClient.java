@@ -7,6 +7,7 @@ import com.sandymandy.strut.armour.ArmourClient;
 import com.sandymandy.strut.armour.ArmourCommand;
 import com.sandymandy.strut.armour.ArmourData;
 import com.sandymandy.strut.network.packet.BlockBoneOverridesRequestPacket;
+import com.sandymandy.strut.perf.ProfileCommand;
 import com.sandymandy.strut.perf.SeamDebug;
 import com.sandymandy.strut.player.client.FirstPersonBody;
 import com.sandymandy.strut.renderer.RenderPass;
@@ -228,6 +229,7 @@ public class StrutClient implements ClientModInitializer {
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> {
             WearCommand.register(dispatcher);
             ArmourCommand.register(dispatcher);
+            ProfileCommand.register(dispatcher);
         });
         ClientAssetSyncFabric.init();
 

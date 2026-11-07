@@ -1,6 +1,7 @@
 package com.sandymandy.strut.renderer.gpu;
 
 import com.mojang.blaze3d.systems.RenderSystem;
+import com.sandymandy.strut.animation.state.CageDeform;
 import com.sandymandy.strut.cache.texture.AutoGlowingTexture;
 import com.sandymandy.strut.model.DepthBias;
 import com.sandymandy.strut.model.ShadingMode;
@@ -81,6 +82,8 @@ public final class GpuRenderBackend {
 	/** The group's mesh deformation (see {@link MeshDeformPack}) and the model's mesh element matrices */
 	static final int DEFORM_SSBO_BINDING = 5;
 	static final int DEFORM_MESH_SSBO_BINDING = 6;
+	/** The table of what never changes for each flesh particle (see {@link CageGlsl}), the same in the pose pass of a shader pack */
+	static final int CAGE_SSBO_BINDING = CageGlsl.BINDING;
 
 	/**
 	 * One {@code InstanceData} struct's size under std430 layout: {@code int}/{@code int} (8 bytes),
@@ -201,7 +204,7 @@ public final class GpuRenderBackend {
 			uniform int DeformMeshCount;
 			uniform int DeformOffsetBase;
 			uniform int DeformNormalBase;
-
+			""" + CageGlsl.SOURCE + """
 			uniform mat4 ProjMat;
 			uniform mat4 ModelViewMat;
 			uniform int BoneCount;
@@ -370,9 +373,16 @@ public final class GpuRenderBackend {
 			        }
 			        else if (entry <= -2) {
 			            int code = -2 - entry;
-			            int slot = code >> 1;
+			            int slot = code >> 2;
+			            int kind = code & 3;
 
-			            if ((code & 1) == 0) {
+			            if (kind == 2) {
+			                // a flesh's cage: the offset and the change of normal are worked out here from the cage's own numbers
+			                cageDeform(slot, DeformInfo.z, deformOffset, deformNormalDelta);
+			                deformed = true;
+			                deformedDelta = true;
+			            }
+			            else if (kind == 0) {
 			                // a value for each welded particle: the offset, and the change to the normal of the corners there
 			                int at = DeformOffsetBase + (slot + DeformInfo.z) * 4;
 
@@ -919,11 +929,13 @@ public final class GpuRenderBackend {
 			fogColorLocation = shader.uniformLocation("FogColor");
 			paramsLocation = shader.uniformLocation("StrutParams[0]");
 			compiledHooksVersion = StrutShaderHooks.version();
+			CageDeform.gpu = true;
 
 			return true;
 		}
 		catch (RuntimeException ex) {
 			initFailed = true;
+			CageDeform.gpu = false;
 
 			throw ex;
 		}
@@ -1233,6 +1245,7 @@ public final class GpuRenderBackend {
 		MeshDeformState.offsetBase = pack.offsetBase();
 		MeshDeformState.normalBase = pack.normalBase();
 		MeshDeformState.hasNormals = pack.hasNormals();
+		MeshDeformState.cageSsbo = CageBuffer.sync();
 		bindDeform();
 	}
 
@@ -1257,6 +1270,7 @@ public final class GpuRenderBackend {
 
 		GL30.glBindBufferBase(GL43.GL_SHADER_STORAGE_BUFFER, DEFORM_SSBO_BINDING, MeshDeformState.dataSsbo);
 		GL30.glBindBufferBase(GL43.GL_SHADER_STORAGE_BUFFER, DEFORM_MESH_SSBO_BINDING, MeshDeformState.meshSsbo);
+		GL30.glBindBufferBase(GL43.GL_SHADER_STORAGE_BUFFER, CAGE_SSBO_BINDING, MeshDeformState.cageSsbo);
 		GL20.glUniform1i(hasDeformLocation, 1);
 		GL20.glUniform1i(hasDeformNormalsLocation, MeshDeformState.hasNormals ? 1 : 0);
 		GL20.glUniform1i(deformMeshCountLocation, MeshDeformState.meshCount);

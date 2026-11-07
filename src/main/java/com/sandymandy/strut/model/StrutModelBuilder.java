@@ -12,7 +12,7 @@ import java.util.function.Function;
  * without writing a class
  * <pre>{@code
  * StrutModel<`CharacterEntity`> model = StrutModel.<`CharacterEntity`>builder()
- *         .model(creature -> id("strut/models/" + (creature.isStripped() ? "bare/" : "dressed/") + creature.getCreatureId() + ".strutmodel"))
+ *         .model(creature -> id("strut/models/" + (creature.isAlternate() ? "alt/" : "main/") + creature.getCreatureId() + ".strutmodel"))
  *         .texture(creature -> id("textures/entities/" + creature.getCreatureId() + ".png"))
  *         .animation(id("strut/animations/base/creature.strutanim"))
  *         .build();

@@ -10,7 +10,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * The event log that replaces a mod's hand-rolled event queue and edge flags
  */
 class EventLogTest {
-	private static final Identifier THRUST = Identifier.of("mymod", "strike");
+	private static final Identifier STRIKE = Identifier.of("mymod", "strike");
 	private static final Identifier MARKER = Identifier.of("strut", "marker");
 
 	@Test
@@ -18,11 +18,11 @@ class EventLogTest {
 	void firedLastTickIsAnEdge() {
 		EventLog log = new EventLog();
 
-		log.record(1, THRUST, null, 100);
+		log.record(1, STRIKE, null, 100);
 
-		assertTrue(log.firedLastTick(1, THRUST, 100), "readable by code running after the sweep, in the same tick");
-		assertTrue(log.firedLastTick(1, THRUST, 101), "and by the next tick's entity tick, which runs before the next sweep");
-		assertFalse(log.firedLastTick(1, THRUST, 102), "and then it is gone, so nobody needs a 'did I already see it' flag");
+		assertTrue(log.firedLastTick(1, STRIKE, 100), "readable by code running after the sweep, in the same tick");
+		assertTrue(log.firedLastTick(1, STRIKE, 101), "and by the next tick's entity tick, which runs before the next sweep");
+		assertFalse(log.firedLastTick(1, STRIKE, 102), "and then it is gone, so nobody needs a 'did I already see it' flag");
 	}
 
 	@Test
@@ -30,9 +30,9 @@ class EventLogTest {
 	void keyedByEntityAndType() {
 		EventLog log = new EventLog();
 
-		log.record(1, THRUST, null, 100);
+		log.record(1, STRIKE, null, 100);
 
-		assertFalse(log.firedLastTick(2, THRUST, 100), "another entity");
+		assertFalse(log.firedLastTick(2, STRIKE, 100), "another entity");
 		assertFalse(log.firedLastTick(1, Identifier.of("mymod", "other"), 100), "another type");
 	}
 
@@ -54,11 +54,11 @@ class EventLogTest {
 	void firedSince() {
 		EventLog log = new EventLog();
 
-		log.record(1, THRUST, null, 100);
+		log.record(1, STRIKE, null, 100);
 
-		assertTrue(log.firedSince(1, THRUST, 50));
-		assertTrue(log.firedSince(1, THRUST, 100));
-		assertFalse(log.firedSince(1, THRUST, 101));
+		assertTrue(log.firedSince(1, STRIKE, 50));
+		assertTrue(log.firedSince(1, STRIKE, 100));
+		assertFalse(log.firedSince(1, STRIKE, 101));
 	}
 
 	@Test
@@ -66,12 +66,12 @@ class EventLogTest {
 	void boundedMemory() {
 		EventLog log = new EventLog();
 
-		log.record(1, THRUST, null, 1);
+		log.record(1, STRIKE, null, 1);
 
 		for (int i = 0; i < EventLog.CAPACITY; i++)
 			log.record(1, Identifier.of("mymod", "filler"), null, 2 + i);
 
-		assertFalse(log.firedSince(1, THRUST, 0), "the oldest fell off once the log filled");
+		assertFalse(log.firedSince(1, STRIKE, 0), "the oldest fell off once the log filled");
 		assertTrue(log.firedSince(1, Identifier.of("mymod", "filler"), 0));
 	}
 
@@ -80,9 +80,9 @@ class EventLogTest {
 	void forget() {
 		EventLog log = new EventLog();
 
-		log.record(1, THRUST, null, 100);
+		log.record(1, STRIKE, null, 100);
 		log.forget(1);
 
-		assertFalse(log.firedSince(1, THRUST, 0));
+		assertFalse(log.firedSince(1, STRIKE, 0));
 	}
 }

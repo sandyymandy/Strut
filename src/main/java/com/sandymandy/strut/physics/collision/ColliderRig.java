@@ -32,8 +32,24 @@ public final class ColliderRig {
 	private final Collider.Placed[] inWorld;
 	private final Matrix3f[] orientation;
 	private final Matrix4f matrix = new Matrix4f();
+	/** Each bone's transform from the model for the pose being prepared, so the ancestors the colliders' bones share are composed once */
+	private Matrix4f[] boneMemo = new Matrix4f[0];
+	private boolean[] boneDone = new boolean[0];
 	private final Vector3f v = new Vector3f();
+	private final Vector3f local = new Vector3f();
+	private final Vector3f origin = new Vector3f();
+	private final Vector3f centre = new Vector3f();
 	private final Matrix3f turn = new Matrix3f();
+	/**
+	 * Which placement each shape's world copy is from: every part of a model places the rig for every step at the same spot, so a shape already put there
+	 * for this pose is only handed out again. A new pose or a new spot starts a new placement
+	 */
+	private final int[] placedIn;
+	private int placement = 1;
+	private double placedX = Double.NaN;
+	private double placedY;
+	private double placedZ;
+	private float placedYaw;
 
 	public ColliderRig(BakedStrutModel model, List<Collider> colliders, List<String> missing) {
 		this(model, colliders, List.of(), missing);
@@ -90,6 +106,7 @@ public final class ColliderRig {
 		this.inModel = new Collider.Placed[this.specs.length];
 		this.inWorld = new Collider.Placed[this.specs.length];
 		this.orientation = new Matrix3f[this.specs.length];
+		this.placedIn = new int[this.specs.length];
 
 		for (int i = 0; i < this.specs.length; i++) {
 			this.inModel[i] = new Collider.Placed();
@@ -104,13 +121,25 @@ public final class ColliderRig {
 
 	/** Places every shape in the model's space from the animated pose: blocks, turning with its bone */
 	public void prepare(Pose animated) {
+		this.placedX = Double.NaN;
+
+		int boneCount = animated.boneCount();
+
+		if (this.boneDone.length < boneCount) {
+			this.boneDone = new boolean[boneCount];
+			this.boneMemo = new Matrix4f[boneCount];
+		}
+		else {
+			java.util.Arrays.fill(this.boneDone, false);
+		}
+
 		for (int i = 0; i < this.specs.length; i++) {
 			Collider c = this.specs[i];
 			Collider.Placed m = this.inModel[i];
 
-			PosePalette.computeBoneAtPivot(animated, this.bones[i], this.matrix);
+			PosePalette.computeBoneAtPivot(animated, this.bones[i], this.matrix, this.boneMemo, this.boneDone);
 
-			Vector3f origin = this.matrix.transformPosition(0f, 0f, 0f, new Vector3f());
+			Vector3f origin = this.matrix.transformPosition(0f, 0f, 0f, this.origin);
 
 			this.orientation[i].set(this.matrix);
 			PhysicsInstance.stripScale(this.orientation[i], this.v);
@@ -135,7 +164,7 @@ public final class ColliderRig {
 					m.q[1] = origin.y;
 					m.q[2] = origin.z;
 
-					Vector3f centre = this.orientation[i].transform(new Vector3f(f.cx, f.cy, f.cz));
+					Vector3f centre = this.orientation[i].transform(this.centre.set(f.cx, f.cy, f.cz));
 
 					m.p[0] = origin.x + centre.x;
 					m.p[1] = origin.y + centre.y;
@@ -190,6 +219,26 @@ public final class ColliderRig {
 		return skip;
 	}
 
+	/** Which shapes to leave out: those whose bone {@code leaveOut} says to, made or authored alike */
+	public boolean[] maskWhere(java.util.function.Predicate<GroupBoneDefinition> leaveOut) {
+		boolean[] skip = new boolean[this.specs.length];
+
+		for (int i = 0; i < skip.length; i++)
+			skip[i] = leaveOut.test(this.boneOfShape[i]);
+
+		return skip;
+	}
+
+	/** Whether {@code bone} is {@code root} or under it */
+	public static boolean under(GroupBoneDefinition bone, GroupBoneDefinition root) {
+		for (GroupBoneDefinition x = bone; x != null; x = x.getParent()) {
+			if (x == root)
+				return true;
+		}
+
+		return false;
+	}
+
 	private static boolean related(GroupBoneDefinition a, GroupBoneDefinition b) {
 		for (GroupBoneDefinition x = a; x != null; x = x.getParent()) {
 			if (x == b)
@@ -206,12 +255,39 @@ public final class ColliderRig {
 
 	/** {@link #place(double, double, double, float, Set, List)}, leaving out the shapes {@code skip} marks (may be null) */
 	public void place(double ex, double ey, double ez, float yaw, Set<String> layers, boolean[] skip, List<Collider.Placed> out) {
+		place(ex, ey, ez, yaw, layers, skip, null, null, out);
+	}
+
+	/**
+	 * {@link #place(double, double, double, float, Set, boolean[], List)}, handing out only the shapes that could touch the box {@code lo}..{@code hi} (both
+	 * null for every shape): a part that only reaches a little way round itself is not given the whole body to test
+	 */
+	public void place(double ex, double ey, double ez, float yaw, Set<String> layers, boolean[] skip, double[] lo, double[] hi, List<Collider.Placed> out) {
+		if (ex != this.placedX || ey != this.placedY || ez != this.placedZ || yaw != this.placedYaw) {
+			this.placement++;
+			this.placedX = ex;
+			this.placedY = ey;
+			this.placedZ = ez;
+			this.placedYaw = yaw;
+			this.turn.rotationY((float)Math.toRadians(180f - yaw));
+		}
+
 		for (int i = 0; i < this.specs.length; i++) {
-			if ((layers != null && !layers.contains(this.specs[i].layer())) || (skip != null && skip[i]))
+			if ((skip != null && skip[i]) || (layers != null && !layers.contains(this.specs[i].layer())))
 				continue;
 
-			Collider.Placed m = this.inModel[i];
 			Collider.Placed w = this.inWorld[i];
+
+			if (this.placedIn[i] == this.placement) {
+				if (lo == null || Collider.near(w, lo, hi))
+					out.add(w);
+
+				continue;
+			}
+
+			Collider.Placed m = this.inModel[i];
+
+			this.placedIn[i] = this.placement;
 
 			w.shape = m.shape;
 			w.layer = m.layer;
@@ -224,15 +300,16 @@ public final class ColliderRig {
 
 			if (m.shape == Collider.Shape.MESH) {
 				w.sdf = m.sdf;
-				this.turn.identity().rotateY((float)Math.toRadians(180f - yaw)).mul(this.orientation[i], w.axes);
+				this.turn.mul(this.orientation[i], w.axes);
 			}
 
 			if (m.shape == Collider.Shape.BOX) {
 				System.arraycopy(m.half, 0, w.half, 0, 3);
-				this.turn.identity().rotateY((float)Math.toRadians(180f - yaw)).mul(this.orientation[i], w.axes);
+				this.turn.mul(this.orientation[i], w.axes);
 			}
 
-			out.add(w);
+			if (lo == null || Collider.near(w, lo, hi))
+				out.add(w);
 		}
 	}
 
@@ -246,7 +323,7 @@ public final class ColliderRig {
 
 	/** {@code origin + orientation * (local / 16)} into {@code out} */
 	private void set(double[] out, Vector3f origin, Matrix3f orientation, Vector3f local) {
-		Vector3f p = orientation.transform(new Vector3f(local).div(16f));
+		Vector3f p = orientation.transform(this.local.set(local).div(16f));
 
 		out[0] = origin.x + p.x;
 		out[1] = origin.y + p.y;

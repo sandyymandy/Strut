@@ -27,16 +27,16 @@ import com.sandymandy.strut.event.type.StrutEventTypes;
  * rather than an exception that stops a reload
  */
 class EventTypeRegistryTest {
-	private static final Identifier THRUST = Identifier.of("mymod", "strike");
-	private static final Identifier CUMFLATE = Identifier.of("mymod", "inflate");
+	private static final Identifier STRIKE = Identifier.of("mymod", "strike");
+	private static final Identifier SWELL = Identifier.of("mymod", "swell");
 
 	private static StrutEventType<Unit> strike() {
-		return StrutEventType.builder(THRUST, PacketCodec.<PacketByteBuf, Unit>unit(Unit.INSTANCE))
+		return StrutEventType.builder(STRIKE, PacketCodec.<PacketByteBuf, Unit>unit(Unit.INSTANCE))
 				.category(EventCategory.GAMEPLAY).authority(EventAuthority.SERVER).noPayload(Unit.INSTANCE).build();
 	}
 
-	private static StrutEventType<Float> inflate() {
-		return StrutEventType.builder(CUMFLATE, PacketCodecs.FLOAT.cast())
+	private static StrutEventType<Float> swell() {
+		return StrutEventType.builder(SWELL, PacketCodecs.FLOAT.cast())
 				.category(EventCategory.GAMEPLAY).authority(EventAuthority.BOTH).parser(Float::parseFloat).build();
 	}
 
@@ -45,7 +45,7 @@ class EventTypeRegistryTest {
 
 		StrutBuiltinEvents.registerAll(registry);
 		registry.register(strike());
-		registry.register(inflate());
+		registry.register(swell());
 
 		return registry;
 	}
@@ -53,7 +53,7 @@ class EventTypeRegistryTest {
 	@Test
 	@DisplayName("a registered type can be looked up by id, with the defaults it was built with")
 	void registeredTypesAreFound() {
-		StrutEventType<?> type = registry().get(THRUST);
+		StrutEventType<?> type = registry().get(STRIKE);
 
 		assertNotNull(type);
 		assertEquals(EventAuthority.SERVER, type.defaultAuthority());
@@ -115,11 +115,11 @@ class EventTypeRegistryTest {
 	@Test
 	@DisplayName("a keyframe with several lines resolves to typed events in line order")
 	void severalLinesResolveInOrder() {
-		List<EventTypeRegistry.Resolution> resolved = registry().resolveAll("mymod:strike\nmymod:inflate 2.5\nswap_end");
+		List<EventTypeRegistry.Resolution> resolved = registry().resolveAll("mymod:strike\nmymod:swell 2.5\nswap_end");
 
 		assertEquals(3, resolved.size());
 		assertTrue(resolved.stream().allMatch(EventTypeRegistry.Resolution::isOk));
-		assertEquals(THRUST, resolved.get(0).event().type().id());
+		assertEquals(STRIKE, resolved.get(0).event().type().id());
 		assertEquals(2.5f, resolved.get(1).event().payload());
 		assertEquals(Identifier.of(StrutConstants.MODID, "marker"), resolved.get(2).event().type().id());
 		assertEquals("swap_end", resolved.get(2).event().payload());
@@ -138,10 +138,10 @@ class EventTypeRegistryTest {
 	@Test
 	@DisplayName("a bad payload names the type and the offending text")
 	void badPayloadNamesTheType() {
-		EventTypeRegistry.Resolution resolution = registry().resolveAll("mymod:inflate lots").get(0);
+		EventTypeRegistry.Resolution resolution = registry().resolveAll("mymod:swell lots").get(0);
 
 		assertFalse(resolution.isOk());
-		assertTrue(resolution.error().contains("mymod:inflate"), resolution.error());
+		assertTrue(resolution.error().contains("mymod:swell"), resolution.error());
 		assertTrue(resolution.error().contains("lots"), resolution.error());
 	}
 

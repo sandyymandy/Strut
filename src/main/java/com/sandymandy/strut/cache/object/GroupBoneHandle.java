@@ -102,6 +102,16 @@ public class GroupBoneHandle implements PosableBone {
 		return this.instance.currentPose();
 	}
 
+	@Override
+	public boolean writtenSinceReset() {
+		return pose().written(this.index);
+	}
+
+	@Override
+	public void clearWritten() {
+		pose().clearWritten(this.index);
+	}
+
 	public float getRotX() {
 		return pose().getRotX(this.index);
 	}

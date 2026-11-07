@@ -43,7 +43,7 @@
 </table>
 
 <h3 id="lines">The instruction line</h3>
-<pre><code>mymod:inflate 2.5           a namespaced type id, then its payload text
+<pre><code>mymod:swell 2.5           a namespaced type id, then its payload text
 mymod:fade_to_black          a type with no payload
 swap_end                  a bare word: shorthand for strut:marker swap_end
 [server] mymod:strike        modifiers in square brackets, before the type
@@ -54,7 +54,7 @@ swap_end                  a bare word: shorthand for strut:marker swap_end
 	<tr><td><code>server</code>, <code>client</code>, <code>both</code></td><td>Where it runs, instead of the type's default. At most one.</td></tr>
 	<tr><td><code>reverse</code></td><td>Also fire when playback crosses it backwards (a seek back, a negative rate). The default is to skip.</td></tr>
 </table>
-<p>A bare word is a <em>marker</em>: a named point that any code can listen for. Markers are lower-cased, so <code>becomeBare</code> and <code>becomebare</code> are the same marker.</p>
+<p>A bare word is a <em>marker</em>: a named point that any code can listen for. Markers are lower-cased, so <code>changeLook</code> and <code>changelook</code> are the same marker.</p>
 
 <h2 id="builtin">Built-in event types</h2>
 <table>
@@ -117,7 +117,7 @@ swap_end                  a bare word: shorthand for strut:marker swap_end
 <h2 id="bindings">Bindings: sounds without code</h2>
 <p>The sound channel can carry a <em>binding key</em> instead of a sound id. A binding set maps keys to what to play, per character or per situation, in a resource-pack file <code>assets/&lt;ns&gt;/strut/event_bindings/&lt;path&gt;.json</code> (set id <code>&lt;ns&gt;:&lt;path&gt;</code>):</p>
 <pre><code>{
-	"pound":    { "sounds": ["mymod:misc.impact"] },
+	"strike":    { "sounds": ["mymod:misc.impact"] },
 	"thumpmsg1": { "sounds": ["mymod:thump"],
 	              "random_sounds": ["mymod:ahh", { "sound": "mymod:mmm", "weight": 2 }, { "none": true, "weight": 3 }] }
 }</code></pre>

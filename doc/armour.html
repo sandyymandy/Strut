@@ -82,7 +82,7 @@ PlayerBody.builder(id).armour(Identifier.of("mymod", "creature"))          // a 
 <h2 id="hidden">Hiding armour</h2>
 <pre><code>StrutArmour.setHidden(entity, "chest", true);   // server: everyone who sees the entity, saved with it
 StrutArmour.isHidden(entity, "chest");          // either side</code></pre>
-<p>A slot that is hidden draws no piece and hides none of the bones it covers. A character's "show armour" button and a scene that strips her are the same call. The covers are low-priority overrides (priority -500), so a mod's own override on the same bone still wins.</p>
+<p>A slot that is hidden draws no piece and hides none of the bones it covers. A character's "show armour" button and a scene that hides it are the same call. The covers are low-priority overrides (priority -500), so a mod's own override on the same bone still wins.</p>
 
 <h2 id="limits">Limits</h2>
 <ul>

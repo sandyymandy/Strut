@@ -3,7 +3,7 @@ package com.sandymandy.strut.physics.fluid;
 import com.google.gson.JsonObject;
 
 /**
- * What one kind of thick liquid is made of: a cloud of soft particles that pull on each other and drag on what they touch, drawn as one smooth blobby
+ * What one kind of viscous fluid is made of: a cloud of soft particles that pull on each other and drag on what they touch, drawn as one smooth blobby
  * surface (metaballs). Every length is in blocks, every time in seconds
  *
  * @param radius How far a particle reaches: it pulls on and is pushed by neighbours inside this, and its blob of surface reaches about half of it

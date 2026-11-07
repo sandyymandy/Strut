@@ -55,6 +55,26 @@ class AutoColliderTest {
 	}
 
 	@Test
+	void aBoneThatMustHaveAShapeGetsOneBeyondTheCap() throws Exception {
+		BakedStrutModel model = dummy();
+		AutoColliders.Options capped = new AutoColliders.Options(null, 3, List.of(), "body", 1, Map.of(), "proxy");
+		List<Collider> all = AutoColliders.generate(model, new AutoColliders.Options(null, 3, List.of(), "body", 1000, Map.of(), "proxy"));
+
+		assertTrue(all.size() > 2, "the dummy has several bones with shapes");
+
+		// the smallest bone is the first to be cut by a cap of one
+		String smallest = all.get(all.size() - 1).bone();
+		Set<String> kept = new HashSet<>();
+
+		AutoColliders.generate(model, capped).forEach(c -> kept.add(c.bone()));
+		assertFalse(kept.contains(smallest), "cut by the cap");
+
+		kept.clear();
+		AutoColliders.generate(model, capped, Set.of(), Set.of(smallest)).forEach(c -> kept.add(c.bone()));
+		assertTrue(kept.contains(smallest), "kept past the cap because it must have a shape");
+	}
+
+	@Test
 	void aDetailedBoneIsReducedToOneProxyAndAFewCubesKeepTheirOwnBoxes() throws Exception {
 		BakedStrutModel model = dummy();
 		Map<String, Integer> perBone = new HashMap<>();

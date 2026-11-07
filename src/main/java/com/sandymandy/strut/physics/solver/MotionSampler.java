@@ -8,7 +8,7 @@ import net.minecraft.util.math.Vec3d;
 import com.sandymandy.strut.physics.PhysicsInstance;
 
 /**
- * Reads an entity's interpolated position and body yaw for the frame being drawn, on the game clock. This is the only place the physics touches the world
+ * Reads an entity's interpolated position, body yaw and walk for the frame being drawn, on the game clock. This is the only place the physics touches the world
  */
 public final class MotionSampler {
 	private MotionSampler() {}
@@ -31,7 +31,23 @@ public final class MotionSampler {
 		Vec3d pos = entity.getLerpedPos(delta);
 		float yaw = entity instanceof LivingEntity living ? MathHelper.lerpAngleDegrees(delta, living.prevBodyYaw, living.bodyYaw) : entity.getYaw(delta);
 
-		return new PhysicsInstance.Sample(pos.x, pos.y, pos.z, yaw, (client.world.getTime() + delta) / 20.0);
+		// how fast and how far the legs have walked, as the walking animation measures them: what bounces a soft body on each step
+		float legSpeed = entity instanceof LivingEntity living ? living.limbAnimator.getSpeed(delta) : 0f;
+		float legPosition = entity instanceof LivingEntity living ? living.limbAnimator.getPos(delta) : 0f;
+
+		return new PhysicsInstance.Sample(pos.x, pos.y, pos.z, yaw, (client.world.getTime() + delta) / 20.0, legSpeed, legPosition);
+	}
+
+	/** Whether the entity is the one the camera belongs to (the player's own model, seen from behind or in a mirror) */
+	public static boolean isViewer(int entityId) {
+		MinecraftClient client = MinecraftClient.getInstance();
+
+		if (client == null)
+			return false;
+
+		Entity camera = client.getCameraEntity();
+
+		return (camera != null && camera.getId() == entityId) || (client.player != null && client.player.getId() == entityId);
 	}
 
 	/** The distance from the camera to the entity's last known place, or 0 if unknown */

@@ -113,13 +113,13 @@ class StrutModelConventionsTest {
 	void builderConstantsAndFunctions() {
 		Bare creature = new Bare();
 		StrutModel<Bare> model = StrutModel.<Bare>builder()
-				.model(animatable -> animatable == creature ? id("mymod", "strut/models/bare/eve.strutmodel") : id("mymod", "strut/models/bare/other.strutmodel"))
+				.model(animatable -> animatable == creature ? id("mymod", "strut/models/alt/eve.strutmodel") : id("mymod", "strut/models/alt/other.strutmodel"))
 				.texture(id("mymod", "textures/entities/eve.png"))
 				.animation(id("mymod", "strut/animations/base/creature.strutanim"))
 				.build();
 
-		assertEquals(id("mymod", "strut/models/bare/eve.strutmodel"), model.getModelResource(creature));
-		assertEquals(id("mymod", "strut/models/bare/other.strutmodel"), model.getModelResource(new Bare()));
+		assertEquals(id("mymod", "strut/models/alt/eve.strutmodel"), model.getModelResource(creature));
+		assertEquals(id("mymod", "strut/models/alt/other.strutmodel"), model.getModelResource(new Bare()));
 		assertEquals(id("mymod", "textures/entities/eve.png"), model.getTextureResource(creature), "a plural folder, unlike the convention");
 		assertEquals(id("mymod", "strut/animations/base/creature.strutanim"), model.getAnimationResource(creature));
 	}
@@ -127,18 +127,18 @@ class StrutModelConventionsTest {
 	@Test
 	@DisplayName("a function is evaluated every time, so a model can change with the animatable's state")
 	void builderFunctionsAreLive() {
-		boolean[] stripped = {false};
+		boolean[] alternate = {false};
 		StrutModel<Bare> model = StrutModel.<Bare>builder()
-				.model(animatable -> id("mymod", stripped[0] ? "strut/models/bare/x.strutmodel" : "strut/models/dressed/x.strutmodel"))
+				.model(animatable -> id("mymod", alternate[0] ? "strut/models/alt/x.strutmodel" : "strut/models/main/x.strutmodel"))
 				.texture(id("mymod", "t.png"))
 				.animation(id("mymod", "a.strutanim"))
 				.build();
 
-		assertEquals("strut/models/dressed/x.strutmodel", model.getModelResource(new Bare()).getPath());
+		assertEquals("strut/models/main/x.strutmodel", model.getModelResource(new Bare()).getPath());
 
-		stripped[0] = true;
+		alternate[0] = true;
 
-		assertEquals("strut/models/bare/x.strutmodel", model.getModelResource(new Bare()).getPath());
+		assertEquals("strut/models/alt/x.strutmodel", model.getModelResource(new Bare()).getPath());
 	}
 
 	@Test

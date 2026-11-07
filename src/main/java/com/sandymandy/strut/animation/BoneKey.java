@@ -4,6 +4,7 @@ import com.sandymandy.strut.loading.binary.StrutBinaryFormats.TargetKind;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Addresses one bone by what kind of bone it is and its name
@@ -25,13 +26,62 @@ import java.util.Map;
  * armature bone sharing a name is rare and the group bone winning unqualified resolution keeps the
  * common case unsurprising
  */
-public record BoneKey(TargetKind kind, String name) {
+public final class BoneKey {
+	// one key per kind and name, so the maps an animation runs through every frame find a key by identity rather than by comparing names
+	private static final ConcurrentHashMap<String, BoneKey> GROUP_KEYS = new ConcurrentHashMap<>();
+	private static final ConcurrentHashMap<String, BoneKey> ARMATURE_KEYS = new ConcurrentHashMap<>();
+
+	private final TargetKind kind;
+	private final String name;
+	private final int hash;
+
+	private BoneKey(TargetKind kind, String name) {
+		this.kind = kind;
+		this.name = name;
+		this.hash = 31 * kind.hashCode() + name.hashCode();
+	}
+
+	/** The key for a bone of {@code kind} named {@code name}: always the same instance for the same two */
+	public static BoneKey of(TargetKind kind, String name) {
+		ConcurrentHashMap<String, BoneKey> keys = kind == TargetKind.ARMATURE_BONE ? ARMATURE_KEYS : GROUP_KEYS;
+		BoneKey key = keys.get(name);
+
+		// looked up first: the key nearly always exists, and making the function that would add it costs an allocation every call
+		return key != null ? key : keys.computeIfAbsent(name, n -> new BoneKey(kind, n));
+	}
+
 	public static BoneKey group(String name) {
-		return new BoneKey(TargetKind.GROUP_BONE, name);
+		return of(TargetKind.GROUP_BONE, name);
 	}
 
 	public static BoneKey armature(String name) {
-		return new BoneKey(TargetKind.ARMATURE_BONE, name);
+		return of(TargetKind.ARMATURE_BONE, name);
+	}
+
+	public TargetKind kind() {
+		return this.kind;
+	}
+
+	public String name() {
+		return this.name;
+	}
+
+	@Override
+	public boolean equals(Object other) {
+		if (this == other)
+			return true;
+
+		return other instanceof BoneKey key && key.hash == this.hash && key.kind == this.kind && key.name.equals(this.name);
+	}
+
+	@Override
+	public int hashCode() {
+		return this.hash;
+	}
+
+	@Override
+	public String toString() {
+		return "BoneKey[kind=" + this.kind + ", name=" + this.name + "]";
 	}
 
 	/**
@@ -50,7 +100,7 @@ public record BoneKey(TargetKind kind, String name) {
 		if (kind == null)
 			return resolveUnqualified(registered, name);
 
-		BoneKey key = new BoneKey(kind, name);
+		BoneKey key = of(kind, name);
 
 		return registered.containsKey(key) ? key : null;
 	}

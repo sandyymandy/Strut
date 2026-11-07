@@ -463,13 +463,13 @@ class ServerEventDispatcherTest {
 	@Test
 	@DisplayName("marker listeners match names case-insensitively")
 	void markerNamesAreCaseInsensitive() {
-		this.clips.put("c", clip(100, LoopMode.PLAY_ONCE, marker(0, 1, "becomebare")));
-		this.listeners.addMarker("becomeBare", ctx -> this.fired.add("bare"));
+		this.clips.put("c", clip(100, LoopMode.PLAY_ONCE, marker(0, 1, "changelook")));
+		this.listeners.addMarker("changeLook", ctx -> this.fired.add("look"));
 		play("c", 0, 1, LoopMode.PLAY_ONCE);
 
 		sweep(10);
 
-		assertEquals(List.of("bare"), this.fired);
+		assertEquals(List.of("look"), this.fired);
 	}
 
 	@Test

@@ -4,6 +4,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonPrimitive;
 import it.unimi.dsi.fastutil.doubles.Double2DoubleFunction;
 import net.minecraft.util.math.MathHelper;
+import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.Nullable;
 import com.sandymandy.strut.animation.keyframe.AnimationPoint;
 import com.sandymandy.strut.animation.keyframe.Keyframe;
@@ -26,29 +27,29 @@ import java.util.concurrent.ConcurrentHashMap;
 public interface EasingType {
 	final Map<String, EasingType> EASING_TYPES = new ConcurrentHashMap<>(64);
 
-	EasingType LINEAR = register("linear", register("none", value -> easeIn(EasingType::linear)));
+	EasingType LINEAR = register("linear", register("none", value -> Curves.LINEAR));
 	EasingType STEP = register("step", value -> easeIn(step(value)));
-	EasingType EASE_IN_SINE = register("easeinsine", value -> easeIn(EasingType::sine));
-	EasingType EASE_OUT_SINE = register("easeoutsine", value -> easeOut(EasingType::sine));
-	EasingType EASE_IN_OUT_SINE = register("easeinoutsine", value -> easeInOut(EasingType::sine));
-	EasingType EASE_IN_QUAD = register("easeinquad", value -> easeIn(EasingType::quadratic));
-	EasingType EASE_OUT_QUAD = register("easeoutquad", value -> easeOut(EasingType::quadratic));
-	EasingType EASE_IN_OUT_QUAD = register("easeinoutquad", value -> easeInOut(EasingType::quadratic));
-	EasingType EASE_IN_CUBIC = register("easeincubic", value -> easeIn(EasingType::cubic));
-	EasingType EASE_OUT_CUBIC = register("easeoutcubic", value -> easeOut(EasingType::cubic));
-	EasingType EASE_IN_OUT_CUBIC = register("easeinoutcubic", value -> easeInOut(EasingType::cubic));
-	EasingType EASE_IN_QUART = register("easeinquart", value -> easeIn(pow(4)));
-	EasingType EASE_OUT_QUART = register("easeoutquart", value -> easeOut(pow(4)));
-	EasingType EASE_IN_OUT_QUART = register("easeinoutquart", value -> easeInOut(pow(4)));
-	EasingType EASE_IN_QUINT = register("easeinquint", value -> easeIn(pow(5)));
-	EasingType EASE_OUT_QUINT = register("easeoutquint", value -> easeOut(pow(5)));
-	EasingType EASE_IN_OUT_QUINT = register("easeinoutquint", value -> easeInOut(pow(5)));
-	EasingType EASE_IN_EXPO = register("easeinexpo", value -> easeIn(EasingType::exp));
-	EasingType EASE_OUT_EXPO = register("easeoutexpo", value -> easeOut(EasingType::exp));
-	EasingType EASE_IN_OUT_EXPO = register("easeinoutexpo", value -> easeInOut(EasingType::exp));
-	EasingType EASE_IN_CIRC = register("easeincirc", value -> easeIn(EasingType::circle));
-	EasingType EASE_OUT_CIRC = register("easeoutcirc", value -> easeOut(EasingType::circle));
-	EasingType EASE_IN_OUT_CIRC = register("easeinoutcirc", value -> easeInOut(EasingType::circle));
+	EasingType EASE_IN_SINE = register("easeinsine", value -> Curves.IN_SINE);
+	EasingType EASE_OUT_SINE = register("easeoutsine", value -> Curves.OUT_SINE);
+	EasingType EASE_IN_OUT_SINE = register("easeinoutsine", value -> Curves.IN_OUT_SINE);
+	EasingType EASE_IN_QUAD = register("easeinquad", value -> Curves.IN_QUAD);
+	EasingType EASE_OUT_QUAD = register("easeoutquad", value -> Curves.OUT_QUAD);
+	EasingType EASE_IN_OUT_QUAD = register("easeinoutquad", value -> Curves.IN_OUT_QUAD);
+	EasingType EASE_IN_CUBIC = register("easeincubic", value -> Curves.IN_CUBIC);
+	EasingType EASE_OUT_CUBIC = register("easeoutcubic", value -> Curves.OUT_CUBIC);
+	EasingType EASE_IN_OUT_CUBIC = register("easeinoutcubic", value -> Curves.IN_OUT_CUBIC);
+	EasingType EASE_IN_QUART = register("easeinquart", value -> Curves.IN_QUART);
+	EasingType EASE_OUT_QUART = register("easeoutquart", value -> Curves.OUT_QUART);
+	EasingType EASE_IN_OUT_QUART = register("easeinoutquart", value -> Curves.IN_OUT_QUART);
+	EasingType EASE_IN_QUINT = register("easeinquint", value -> Curves.IN_QUINT);
+	EasingType EASE_OUT_QUINT = register("easeoutquint", value -> Curves.OUT_QUINT);
+	EasingType EASE_IN_OUT_QUINT = register("easeinoutquint", value -> Curves.IN_OUT_QUINT);
+	EasingType EASE_IN_EXPO = register("easeinexpo", value -> Curves.IN_EXPO);
+	EasingType EASE_OUT_EXPO = register("easeoutexpo", value -> Curves.OUT_EXPO);
+	EasingType EASE_IN_OUT_EXPO = register("easeinoutexpo", value -> Curves.IN_OUT_EXPO);
+	EasingType EASE_IN_CIRC = register("easeincirc", value -> Curves.IN_CIRC);
+	EasingType EASE_OUT_CIRC = register("easeoutcirc", value -> Curves.OUT_CIRC);
+	EasingType EASE_IN_OUT_CIRC = register("easeinoutcirc", value -> Curves.IN_OUT_CIRC);
 	EasingType EASE_IN_BACK = register("easeinback", value -> easeIn(back(value)));
 	EasingType EASE_OUT_BACK = register("easeoutback", value -> easeOut(back(value)));
 	EasingType EASE_IN_OUT_BACK = register("easeinoutback", value -> easeInOut(back(value)));
@@ -60,6 +61,38 @@ public interface EasingType {
 	EasingType EASE_IN_OUT_BOUNCE = register("easeinoutbounce", value -> easeInOut(bounce(value)));
 	EasingType CATMULLROM = register("catmullrom", new CatmullRomEasing());
 	EasingType BEZIER = register("bezier", new BezierEasing());
+
+	/**
+	 * The curves that take no value, made once: an easing is asked for its curve every frame for every animated channel, and making the curve again each time
+	 * was most of what an animation allocated
+	 */
+	@ApiStatus.Internal
+	final class Curves {
+		static final Double2DoubleFunction LINEAR = EasingType.easeIn(EasingType::linear);
+		static final Double2DoubleFunction IN_SINE = EasingType.easeIn(EasingType::sine);
+		static final Double2DoubleFunction OUT_SINE = EasingType.easeOut(EasingType::sine);
+		static final Double2DoubleFunction IN_OUT_SINE = EasingType.easeInOut(EasingType::sine);
+		static final Double2DoubleFunction IN_QUAD = EasingType.easeIn(EasingType::quadratic);
+		static final Double2DoubleFunction OUT_QUAD = EasingType.easeOut(EasingType::quadratic);
+		static final Double2DoubleFunction IN_OUT_QUAD = EasingType.easeInOut(EasingType::quadratic);
+		static final Double2DoubleFunction IN_CUBIC = EasingType.easeIn(EasingType::cubic);
+		static final Double2DoubleFunction OUT_CUBIC = EasingType.easeOut(EasingType::cubic);
+		static final Double2DoubleFunction IN_OUT_CUBIC = EasingType.easeInOut(EasingType::cubic);
+		static final Double2DoubleFunction IN_QUART = EasingType.easeIn(EasingType.pow(4));
+		static final Double2DoubleFunction OUT_QUART = EasingType.easeOut(EasingType.pow(4));
+		static final Double2DoubleFunction IN_OUT_QUART = EasingType.easeInOut(EasingType.pow(4));
+		static final Double2DoubleFunction IN_QUINT = EasingType.easeIn(EasingType.pow(5));
+		static final Double2DoubleFunction OUT_QUINT = EasingType.easeOut(EasingType.pow(5));
+		static final Double2DoubleFunction IN_OUT_QUINT = EasingType.easeInOut(EasingType.pow(5));
+		static final Double2DoubleFunction IN_EXPO = EasingType.easeIn(EasingType::exp);
+		static final Double2DoubleFunction OUT_EXPO = EasingType.easeOut(EasingType::exp);
+		static final Double2DoubleFunction IN_OUT_EXPO = EasingType.easeInOut(EasingType::exp);
+		static final Double2DoubleFunction IN_CIRC = EasingType.easeIn(EasingType::circle);
+		static final Double2DoubleFunction OUT_CIRC = EasingType.easeOut(EasingType::circle);
+		static final Double2DoubleFunction IN_OUT_CIRC = EasingType.easeInOut(EasingType::circle);
+
+		private Curves() {}
+	}
 
 	Double2DoubleFunction buildTransformer(@Nullable Double value);
 

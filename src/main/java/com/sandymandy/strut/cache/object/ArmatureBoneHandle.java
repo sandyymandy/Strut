@@ -32,6 +32,16 @@ public class ArmatureBoneHandle implements PosableBone {
 	 * handle through {@link ModelInstance#armatureHandlesFor} or {@link ModelInstance#armatureHandleFor}
 	 */
 	@ApiStatus.Internal
+	@Override
+	public boolean writtenSinceReset() {
+		return this.pose.written(this.index);
+	}
+
+	@Override
+	public void clearWritten() {
+		this.pose.clearWritten(this.index);
+	}
+
 	public ArmatureBoneHandle(ArmatureBoneDefinition definition, ArmaturePose pose) {
 		this.definition = definition;
 		this.pose = pose;

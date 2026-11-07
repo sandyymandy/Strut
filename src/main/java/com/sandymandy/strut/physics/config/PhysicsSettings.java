@@ -36,11 +36,13 @@ public final class PhysicsSettings {
 		o.addProperty("playerCollision", PhysicsOptions.playerCollision());
 		o.addProperty("springWorldCollision", PhysicsOptions.springWorldCollision());
 		o.addProperty("cloth", PhysicsOptions.cloth());
+		o.addProperty("flesh", PhysicsOptions.flesh());
 		o.addProperty("fluid", PhysicsOptions.fluid());
 		o.addProperty("water", PhysicsOptions.water());
 		o.addProperty("meshColliders", PhysicsOptions.meshColliders());
 		o.addProperty("quality", PhysicsOptions.quality().name().toLowerCase(Locale.ROOT));
 		o.addProperty("distanceLimit", PhysicsOptions.distanceLimit());
+		o.addProperty("fleshRange", PhysicsOptions.fleshRange());
 
 		return GSON.toJson(o);
 	}
@@ -63,6 +65,9 @@ public final class PhysicsSettings {
 		flag(o, "playerCollision", PhysicsOptions::playerCollision);
 		flag(o, "springWorldCollision", PhysicsOptions::springWorldCollision);
 		flag(o, "cloth", PhysicsOptions::cloth);
+		// "soft" is what flesh was called
+		flag(o, "soft", PhysicsOptions::flesh);
+		flag(o, "flesh", PhysicsOptions::flesh);
 		flag(o, "fluid", PhysicsOptions::fluid);
 		flag(o, "water", PhysicsOptions::water);
 		flag(o, "meshColliders", PhysicsOptions::meshColliders);
@@ -77,6 +82,12 @@ public final class PhysicsSettings {
 		try {
 			if (o.has("distanceLimit"))
 				PhysicsOptions.distanceLimit(o.get("distanceLimit").getAsDouble());
+
+			if (o.has("softRange"))
+				PhysicsOptions.fleshRange(o.get("softRange").getAsDouble());
+
+			if (o.has("fleshRange"))
+				PhysicsOptions.fleshRange(o.get("fleshRange").getAsDouble());
 		}
 		catch (RuntimeException ignored) {
 		}

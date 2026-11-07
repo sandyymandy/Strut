@@ -66,9 +66,9 @@ class EventLineModifierTest {
 	@Test
 	@DisplayName("modifiers and a payload together: the payload starts after the type id, untouched")
 	void modifiersWithPayload() {
-		EventLine.Line line = only("[both, reverse] mymod:inflate 2.5");
+		EventLine.Line line = only("[both, reverse] mymod:swell 2.5");
 
-		assertEquals(Identifier.of("mymod", "inflate"), line.type());
+		assertEquals(Identifier.of("mymod", "swell"), line.type());
 		assertEquals("2.5", line.payload());
 		assertEquals(EventAuthority.BOTH, line.authority());
 		assertTrue(line.reverse());

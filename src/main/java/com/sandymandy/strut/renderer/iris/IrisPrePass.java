@@ -171,7 +171,7 @@ public final class IrisPrePass {
 			uniform int DeformMeshCount;
 			uniform int DeformOffsetBase;
 			uniform int DeformNormalBase;
-
+			""" + com.sandymandy.strut.renderer.gpu.CageGlsl.SOURCE + """
 			// A model's fixed normal (StrutModel#flatNormal), replacing every vertex normal. Not normalised, like a vanilla vertex normal
 			uniform bool UseFlatNormal;
 			uniform vec3 FlatNormal;
@@ -240,9 +240,16 @@ public final class IrisPrePass {
 			            }
 			            else if (entry <= -2) {
 			                int code = -2 - entry;
-			                int slot = code >> 1;
+			                int slot = code >> 2;
+			                int kind = code & 3;
 
-			                if ((code & 1) == 0) {
+			                if (kind == 2) {
+			                    // a flesh's cage: the offset and the change of normal are worked out here from the cage's own numbers
+			                    cageDeform(slot, deformInfo.z, deformOffset, deformNormalDelta);
+			                    deformed = true;
+			                    deformedDelta = true;
+			                }
+			                else if (kind == 0) {
 			                    // a value for each welded particle: the offset, and the change to the normal of the corners there
 			                    int at = DeformOffsetBase + (slot + deformInfo.z) * 4;
 
@@ -660,6 +667,8 @@ public final class IrisPrePass {
 		}
 		catch (RuntimeException ex) {
 			initFailed = true;
+			// the pose pass is what a shader pack's models are posed by, and it cannot work a cage out: the writer goes back to doing it
+			com.sandymandy.strut.animation.state.CageDeform.gpu = false;
 
 			throw ex;
 		}
@@ -816,6 +825,7 @@ public final class IrisPrePass {
 			GL30.glBindBufferBase(GL43.GL_SHADER_STORAGE_BUFFER, DEFORM_STREAM_SSBO_BINDING, model.deformVbo());
 			GL30.glBindBufferBase(GL43.GL_SHADER_STORAGE_BUFFER, DEFORM_SSBO_BINDING, MeshDeformState.dataSsbo);
 			GL30.glBindBufferBase(GL43.GL_SHADER_STORAGE_BUFFER, DEFORM_MESH_SSBO_BINDING, MeshDeformState.meshSsbo);
+			GL30.glBindBufferBase(GL43.GL_SHADER_STORAGE_BUFFER, com.sandymandy.strut.renderer.gpu.CageGlsl.BINDING, MeshDeformState.cageSsbo);
 			GL20.glUniform1i(hasDeformNormalsLoc, MeshDeformState.hasNormals ? 1 : 0);
 			GL20.glUniform1i(deformMeshCountLoc, MeshDeformState.meshCount);
 			GL20.glUniform1i(deformOffsetBaseLoc, MeshDeformState.offsetBase);

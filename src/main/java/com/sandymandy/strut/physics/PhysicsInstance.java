@@ -29,6 +29,8 @@ import com.sandymandy.strut.physics.solver.ChainInstance;
 import com.sandymandy.strut.physics.solver.ChainParams;
 import com.sandymandy.strut.physics.solver.ClothInstance;
 import com.sandymandy.strut.physics.solver.ClothParams;
+import com.sandymandy.strut.physics.flesh.FleshInstance;
+import com.sandymandy.strut.physics.flesh.FleshParams;
 import com.sandymandy.strut.physics.solver.Kinematics;
 import com.sandymandy.strut.physics.solver.RagdollInstance;
 import com.sandymandy.strut.physics.solver.SpringParams;
@@ -46,8 +48,21 @@ import com.sandymandy.strut.physics.world.WorldSource;
  * clock, and adds the resulting rotation and translation to a copy of the pose. Free of game classes so a scripted walk can drive it in a test
  */
 public final class PhysicsInstance {
-	/** Where the entity is and which way it faces at a moment in time. {@code seconds} is game time: it stops when the game does */
-	public record Sample(double x, double y, double z, float yawDegrees, double seconds) {}
+	/**
+	 * Where the entity is and which way it faces at a moment in time. {@code seconds} is game time: it stops when the game does. {@code legSpeed} and
+	 * {@code legPosition} are how fast and how far its legs have walked by the walking animation's own measures (0 when not known): what bounces a soft body on
+	 * each step
+	 */
+	public record Sample(double x, double y, double z, float yawDegrees, double seconds, float legSpeed, float legPosition) {
+		public Sample(double x, double y, double z, float yawDegrees, double seconds) {
+			this(x, y, z, yawDegrees, seconds, 0f, 0f);
+		}
+
+		/** This sample at another time */
+		Sample at(double seconds) {
+			return new Sample(this.x, this.y, this.z, this.yawDegrees, seconds, this.legSpeed, this.legPosition);
+		}
+	}
 
 	/** A time gap beyond this, or a jump beyond {@link #TELEPORT_DISTANCE}, restarts the springs instead of simulating across it */
 	static final double MAX_GAP_SECONDS = 0.5;
@@ -91,6 +106,9 @@ public final class PhysicsInstance {
 	private final Bone[] bones;
 	private final ChainInstance[] chains;
 	private final ClothInstance[] cloths;
+	private final FleshInstance[] softs;
+	/** Whether the entity is near enough the camera for its flesh to run, see {@link PhysicsOptions#effectiveFleshRange()} */
+	private boolean fleshInRange = true;
 	private final RagdollInstance ragdoll;
 	private final ColliderRig rig;
 	private WorldSource world;
@@ -100,6 +118,13 @@ public final class PhysicsInstance {
 	private int entityId = -1;
 	private final List<Collider.Placed> others = new ArrayList<>();
 	private final List<Collider.Placed> ownShapes = new ArrayList<>();
+	/** The shapes of {@link #others} a spring bone's mass could reach this step: in a crowd most of the others' shapes are far from any one bone */
+	private final List<Collider.Placed> nearOthers = new ArrayList<>();
+	private final double[] nearLo = new double[3];
+	private final double[] nearHi = new double[3];
+	private final Vector3f nearPivot = new Vector3f();
+	/** {@link #others} in runs of one entity each, with the box round each, see {@link Bodies.Groups} */
+	private final Bodies.Groups groups = new Bodies.Groups();
 	private final List<Collider.Placed> published = new ArrayList<>();
 	private final Vector3f contactA = new Vector3f();
 	private final double[] contact = new double[3];
@@ -137,12 +162,16 @@ public final class PhysicsInstance {
 	private final List<String> missing = new ArrayList<>();
 	private final List<String> problems = new ArrayList<>();
 
+	/** How long this instance's last frame took, nanoseconds, and what counts as long (2 ms): see {@link #advanceClock} */
+	private long lastUpdateNanos;
+	private static final long SLOW_UPDATE_NANOS = 2_000_000L;
+
 	/** The most steps this frame may take, set by the frame budget (see {@link PhysicsStats#overBudget()}) */
 	int stepLimit = Integer.MAX_VALUE;
 
 	// The last frame's numbers, for the F9 line and the debug command
 	public int lastSteps;
-	int lastSimulatedBones;
+	public int lastSimulatedBones;
 
 	private final PhysicsConfig config;
 
@@ -178,6 +207,17 @@ public final class PhysicsInstance {
 			clothList.addAll(ClothInstance.create(entry.getKey(), entry.getValue(), model, this.problems));
 
 		this.cloths = clothList.toArray(new ClothInstance[0]);
+
+		List<FleshInstance> softList = new ArrayList<>();
+
+		for (var entry : config.flesh().entrySet()) {
+			FleshInstance soft = FleshInstance.create(entry.getKey(), entry.getValue(), model, this.problems);
+
+			if (soft != null)
+				softList.add(soft);
+		}
+
+		this.softs = softList.toArray(new FleshInstance[0]);
 		this.ragdoll = config.ragdoll() != null ? RagdollInstance.create(model, config.ragdoll(), this.missing) : null;
 
 		boolean wantsBody = false;
@@ -191,6 +231,9 @@ public final class PhysicsInstance {
 		for (ClothParams cloth : config.cloth().values())
 			wantsBody |= cloth.collidesWith().contains("body");
 
+		for (FleshParams soft : config.flesh().values())
+			wantsBody |= soft.collidesWith().contains("body");
+
 		AutoColliders.Options auto = config.auto();
 		// shapes are made from the model whenever a part collides with its body, except on the bones that have shapes of their own authored
 		boolean generate = auto != null && auto.enabled() != null ? auto.enabled() : wantsBody;
@@ -198,9 +241,20 @@ public final class PhysicsInstance {
 
 		config.colliders().forEach(c -> authoredBones.add(c.bone()));
 
-		List<Collider> generated = generate ? AutoColliders.generate(model, auto != null ? auto : AutoColliders.Options.DEFAULT, authoredBones) : List.of();
+		// flesh is pressed by the bones its entry names: they always get a shape, however many the model has (the cap keeps the biggest, and a thin arm
+		// is not among them)
+		Set<String> pressers = new HashSet<>();
 
-		this.rig = this.chains.length > 0 || this.cloths.length > 0 || wantsBody || !config.colliders().isEmpty() || !generated.isEmpty() ? new ColliderRig(model, config.colliders(), generated, this.missing) : null;
+		for (FleshParams soft : config.flesh().values()) {
+			for (GroupBoneDefinition bone : model.flatBones()) {
+				if (presses(soft.presses(), bone))
+					pressers.add(bone.getName());
+			}
+		}
+
+		List<Collider> generated = generate ? AutoColliders.generate(model, auto != null ? auto : AutoColliders.Options.DEFAULT, authoredBones, pressers, this.softs.length > 0) : List.of();
+
+		this.rig = this.chains.length > 0 || this.cloths.length > 0 || this.softs.length > 0 || wantsBody || !config.colliders().isEmpty() || !generated.isEmpty() ? new ColliderRig(model, config.colliders(), generated, this.missing) : null;
 
 		if (this.rig != null) {
 			for (ChainInstance chain : this.chains)
@@ -211,7 +265,38 @@ public final class PhysicsInstance {
 
 			for (Bone bone : this.bones)
 				bone.skip = this.rig.mask(config.filter(bone.name), bone.definition);
+
+			for (FleshInstance soft : this.softs) {
+				GroupBoneDefinition[] roots = soft.roots();
+				List<String> presses = soft.active.presses();
+				PhysicsConfig.BoneFilter filter = config.filter(soft.name);
+
+				// the body it rests on is the rest of the model, less the regions themselves and what presses; what presses is the bones named for it
+				soft.bodySkip = this.rig.maskWhere(bone -> underAny(bone, roots) || presses(presses, bone) || !filter.allows(bone.getName()));
+				soft.pressSkip = this.rig.maskWhere(bone -> underAny(bone, roots) || !presses(presses, bone) || !filter.allows(bone.getName()));
+			}
 		}
+	}
+
+	private static boolean underAny(GroupBoneDefinition bone, GroupBoneDefinition[] roots) {
+		for (GroupBoneDefinition root : roots) {
+			if (ColliderRig.under(bone, root))
+				return true;
+		}
+
+		return false;
+	}
+
+	/** Whether {@code bone} or a bone it hangs from is one of the {@code presses} names: a hand presses as its arm does */
+	private static boolean presses(List<String> presses, GroupBoneDefinition bone) {
+		for (GroupBoneDefinition x = bone; x != null; x = x.getParent()) {
+			for (String pattern : presses) {
+				if (AutoColliders.matches(pattern, x.getName()))
+					return true;
+			}
+		}
+
+		return false;
 	}
 
 	/** What cloth could not be made and why, for the log */
@@ -225,10 +310,16 @@ public final class PhysicsInstance {
 			cloth.outputs((mesh, offsets, normals) -> sink.accept(mesh, offsets));
 	}
 
-	/** Hands each cloth's mesh, and each mesh that rides on one, with how it is moved this frame, to {@code sink}: what the renderer reads (a value for each particle, not each corner) */
+	/**
+	 * Hands each cloth's mesh, each mesh that rides on one, and each mesh a soft body moves, with how it is moved this frame, to {@code sink}: what the renderer
+	 * reads (a value for each particle, not each corner)
+	 */
 	public void clothDeforms(BiConsumer<StrutMesh, MeshDeform> sink) {
 		for (ClothInstance cloth : this.cloths)
 			cloth.deforms(sink);
+
+		for (FleshInstance soft : this.softs)
+			soft.deforms(sink);
 	}
 
 	/** {@link #clothOutputs(java.util.function.BiConsumer)} with the normals too */
@@ -245,6 +336,39 @@ public final class PhysicsInstance {
 		}
 
 		throw new IllegalArgumentException("no cloth " + name);
+	}
+
+	/** Says whether the entity is within the flesh range this frame: out of it the flesh rests, and starts again from rest when it comes back */
+	public void fleshInRange(boolean near) {
+		this.fleshInRange = near;
+	}
+
+	/** How much the flesh feels this frame, one of {@link FleshInstance#CONTACT_ALL} and the others: less the farther from the camera */
+	public void fleshContact(int level, int mostOthers) {
+		for (FleshInstance soft : this.softs) {
+			soft.contact = level;
+			soft.mostOthers = mostOthers;
+		}
+	}
+
+	/** Whether the flesh runs this frame */
+	private boolean softs() {
+		return PhysicsOptions.flesh() && this.fleshInRange;
+	}
+
+	/** The flesh entry called {@code name}, for tests */
+	public FleshInstance flesh(String name) {
+		for (FleshInstance soft : this.softs) {
+			if (soft.name.equals(name))
+				return soft;
+		}
+
+		throw new IllegalArgumentException("no flesh " + name);
+	}
+
+	/** How many flesh entries this instance simulates */
+	public int fleshCount() {
+		return this.softs.length;
 	}
 
 	/** How many cloths this instance simulates */
@@ -295,6 +419,15 @@ public final class PhysicsInstance {
 				out.add(new Pickable(cloth.name, k + 1, cloth.state.x[k][0], cloth.state.x[k][1], cloth.state.x[k][2]));
 		}
 
+		double[] at = new double[3];
+
+		for (FleshInstance soft : this.softs) {
+			for (int node : soft.pickable(24)) {
+				soft.nodePosition(node, at);
+				out.add(new Pickable(soft.name, node + 1, at[0], at[1], at[2]));
+			}
+		}
+
 		Vector3f tip = new Vector3f();
 
 		for (Bone bone : this.bones) {
@@ -334,6 +467,9 @@ public final class PhysicsInstance {
 		for (ClothInstance cloth : this.cloths)
 			cloth.reset();
 
+		for (FleshInstance soft : this.softs)
+			soft.reset();
+
 		if (this.ragdoll != null)
 			this.ragdoll.reset();
 
@@ -366,6 +502,8 @@ public final class PhysicsInstance {
 			computeChainOutput(frameFor(this.last));
 			prepareCloth(animated, controls);
 			computeClothOutput(frameFor(this.last));
+			prepareSoft(animated, controls);
+			computeSoftOutput(frameFor(this.last));
 		}
 
 		apply(pose, controls);
@@ -375,7 +513,7 @@ public final class PhysicsInstance {
 		// The game clock is the world time plus the frame's partial tick, and the two are not read at the same instant: now and then a frame reads a time a
 		// hair before the last one. That is jitter, not a rewind, so the frame takes no step instead of restarting every spring
 		if (this.last != null && now.seconds() < this.last.seconds() && this.last.seconds() - now.seconds() <= BACKWARDS_JITTER_SECONDS)
-			now = new Sample(now.x(), now.y(), now.z(), now.yawDegrees(), this.last.seconds());
+			now = now.at(this.last.seconds());
 
 		if (this.last == null || now.seconds() < this.last.seconds() || now.seconds() - this.last.seconds() > MAX_GAP_SECONDS
 				|| distance(now, this.last) > TELEPORT_DISTANCE) {
@@ -394,12 +532,21 @@ public final class PhysicsInstance {
 		// from the frames' own spacing instead (one step per frame that happens to be long enough) made the speed the springs saw depend on how the frames
 		// fell against the steps, which is what made hair and jiggle jolt while the body moved smoothly
 		double h = SpringSolver.STEP / PhysicsOptions.timeScale();
-		int steps = Math.min((int)((now.seconds() - this.simTime) / h + 1e-9), Math.min(PhysicsOptions.maxSteps(), this.stepLimit));
+		// an instance whose last frame ran long does not catch up: more steps to make up for slow ones would make the next frame slower still, and the time
+		// it is behind is let go of below
+		int most = Math.min(PhysicsOptions.maxSteps(), this.stepLimit);
+
+		if (this.lastUpdateNanos > SLOW_UPDATE_NANOS)
+			most = Math.min(most, 2);
+
+		int steps = Math.min((int)((now.seconds() - this.simTime) / h + 1e-9), most);
+		long updateStarted = System.nanoTime();
 
 		// The chains are read from the animation every frame, even one that takes no step, so their pose keeps following an animation that changes faster
 		// than the physics steps
 		prepareChains(animated, controls);
 		prepareCloth(animated, controls);
+		prepareSoft(animated, controls);
 		applyGrab(controls);
 
 		if (this.ragdoll != null) {
@@ -446,6 +593,14 @@ public final class PhysicsInstance {
 					}
 				}
 
+				if (softs()) {
+					for (FleshInstance soft : this.softs) {
+						// the animation's motion this frame spread over its steps: each takes an even share of what is left
+						soft.step(x, y, z, yaw, 1.0 / (steps - s + 1), this.rig, this.others, this.groups, this.worldBoxCount > 0 ? this.worldBoxes.subList(0, this.worldBoxCount) : null, now.legSpeed(), now.legPosition());
+						this.lastSimulatedBones += soft.nodes();
+					}
+				}
+
 				previousX = x;
 				previousY = y;
 				previousZ = z;
@@ -464,7 +619,7 @@ public final class PhysicsInstance {
 		}
 
 		// behind by more than a burst allows: drop the time rather than simulate a hitch
-		if (now.seconds() - this.simTime > Math.min(PhysicsOptions.maxSteps(), this.stepLimit) * h)
+		if (now.seconds() - this.simTime > most * h)
 			this.simTime = now.seconds() - h;
 
 		// keep the last sample at or before the simulation's time, and everything after it
@@ -479,6 +634,8 @@ public final class PhysicsInstance {
 
 		computeChainOutput(frameFor(now));
 		computeClothOutput(frameFor(now));
+		computeSoftOutput(frameFor(now));
+		this.lastUpdateNanos = System.nanoTime() - updateStarted;
 
 		if (this.ragdoll != null)
 			this.ragdoll.computeOutput(frameFor(now));
@@ -532,7 +689,7 @@ public final class PhysicsInstance {
 	 * where the entity is drawn now would leave them standing still while the body moved on between steps, and catching up when a step came: a jolt
 	 */
 	private Sample anchor(Sample fallback) {
-		return this.stepKnown ? new Sample(this.stepX, this.stepY, this.stepZ, this.stepYaw, fallback.seconds()) : fallback;
+		return this.stepKnown ? new Sample(this.stepX, this.stepY, this.stepZ, this.stepYaw, fallback.seconds(), fallback.legSpeed(), fallback.legPosition()) : fallback;
 	}
 
 	/** {@link #anchor} for the last two steps, and where the frame falls between them */
@@ -550,6 +707,7 @@ public final class PhysicsInstance {
 	/** Reads the shapes of the entities around into {@link #others}: once a frame, they are only stepped through */
 	private void gatherOthers(Sample at) {
 		this.others.clear();
+		this.groups.clear();
 
 		if (this.entityId < 0 || (!PhysicsOptions.otherCollision() && !PhysicsOptions.playerCollision()))
 			return;
@@ -571,13 +729,22 @@ public final class PhysicsInstance {
 			}
 		}
 
+		if (softs()) {
+			for (FleshInstance soft : this.softs) {
+				if (soft.active.weight() > 0f && feelsOthers(soft.active.collidesWith())) {
+					wants = true;
+					reach = Math.max(reach, soft.reach());
+				}
+			}
+		}
+
 		for (Bone bone : this.bones) {
 			if (bone.active.weight() > 0f && bone.active.rotate() && feelsOthers(bone.active.collidesWith()))
 				wants = true;
 		}
 
 		if (wants)
-			Bodies.nearby(this.entityId, at.x(), at.y() + 1.0, at.z(), reach + 3.5, PhysicsOptions.otherCollision(), PhysicsOptions.playerCollision(), this.others);
+			Bodies.nearby(this.entityId, at.x(), at.y() + 1.0, at.z(), reach + 3.5, PhysicsOptions.otherCollision(), PhysicsOptions.playerCollision(), this.others, this.groups);
 	}
 
 	static boolean feelsOthers(Set<String> layers) {
@@ -613,6 +780,9 @@ public final class PhysicsInstance {
 				cloth.hold(grab.index() - 1, new double[] {grab.x(), grab.y(), grab.z()});
 		}
 
+		for (FleshInstance soft : this.softs)
+			soft.hold(grab != null && grab.part().equals(soft.name) ? grab.index() - 1 : -1, grab != null && grab.part().equals(soft.name) ? new double[] {grab.x(), grab.y(), grab.z()} : null);
+
 		if (this.ragdoll != null) {
 			this.ragdoll.unpinAll();
 
@@ -634,7 +804,7 @@ public final class PhysicsInstance {
 
 		boolean ragdolling = this.ragdoll != null && this.ragdoll.active();
 
-		if (this.world == null || !PhysicsOptions.worldCollision() || (this.chains.length == 0 && this.cloths.length == 0 && this.bones.length == 0 && !ragdolling))
+		if (this.world == null || !PhysicsOptions.worldCollision() || (this.chains.length == 0 && this.cloths.length == 0 && this.bones.length == 0 && this.softs.length == 0 && !ragdolling))
 			return;
 
 		// what hangs from the entity: read around the entity, kept while it has moved less than a quarter block, and refreshed every eight frames regardless so a
@@ -662,6 +832,15 @@ public final class PhysicsInstance {
 			if (feelsWorld(bone.active)) {
 				entity = true;
 				reach = Math.max(reach, bone.active.length() + bone.active.radius());
+			}
+		}
+
+		if (softs()) {
+			for (FleshInstance soft : this.softs) {
+				if (soft.feelsWorld()) {
+					entity = true;
+					reach = Math.max(reach, 1.0);
+				}
 			}
 		}
 
@@ -804,6 +983,27 @@ public final class PhysicsInstance {
 			cloth.computeOutput(at);
 	}
 
+	/** Reads where the animation puts each soft body every frame, even one that takes no step */
+	private void prepareSoft(Pose animated, PhysicsControls controls) {
+		if (!softs()) {
+			for (FleshInstance soft : this.softs)
+				soft.reset();
+
+			return;
+		}
+
+		for (FleshInstance soft : this.softs)
+			soft.prepare(animated, controls);
+	}
+
+	private void computeSoftOutput(StepFrame at) {
+		if (!softs())
+			return;
+
+		for (FleshInstance soft : this.softs)
+			soft.computeOutput(at);
+	}
+
 	private void computeChainOutput(StepFrame at) {
 		for (ChainInstance chain : this.chains)
 			chain.computeOutput(at);
@@ -942,9 +1142,45 @@ public final class PhysicsInstance {
 		boolean bodies = !this.others.isEmpty() && feelsOthers(params.collidesWith());
 		boolean own = this.rig != null && params.collidesWith().contains("body");
 
+		boolean near = params.rotate() && (bodies || own);
+
+		if (near) {
+			// the mass is no farther from the pivot than the lever plus what the rotation swings it by; a push moves it by about the ball's size
+			float lever = params.length() * params.tip().length();
+			float rot = (float)Math.sqrt(bone.state.rot[0] * bone.state.rot[0] + bone.state.rot[1] * bone.state.rot[1] + bone.state.rot[2] * bone.state.rot[2]);
+			double reach = lever * (1f + rot) + params.radius() * 3f + 0.0625;
+			Vector3f pivot = this.nearPivot.set(bone.origin);
+
+			Kinematics.modelToWorld(pivot, yaw);
+
+			this.nearLo[0] = ex + pivot.x - reach;
+			this.nearLo[1] = ey + pivot.y - reach;
+			this.nearLo[2] = ez + pivot.z - reach;
+			this.nearHi[0] = ex + pivot.x + reach;
+			this.nearHi[1] = ey + pivot.y + reach;
+			this.nearHi[2] = ez + pivot.z + reach;
+			this.nearOthers.clear();
+
+			if (bodies) {
+				for (int g = 0; g < this.groups.count(); g++) {
+					if (!this.groups.touches(g, this.nearLo, this.nearHi))
+						continue;
+
+					for (int i = this.groups.start(g), end = this.groups.end(g); i < end; i++) {
+						Collider.Placed shape = this.others.get(i);
+
+						if (Collider.near(shape, this.nearLo, this.nearHi))
+							this.nearOthers.add(shape);
+					}
+				}
+
+				bodies = !this.nearOthers.isEmpty();
+			}
+		}
+
 		if (own) {
 			this.ownShapes.clear();
-			this.rig.place(ex, ey, ez, yaw, params.collidesWith(), bone.skip, this.ownShapes);
+			this.rig.place(ex, ey, ez, yaw, params.collidesWith(), bone.skip, near ? this.nearLo : null, near ? this.nearHi : null, this.ownShapes);
 
 			// where the mass rests: a generated shape it already overlaps there is part of the model's pose, not something to collide with
 			Vector3f restPoint = bone.orientation.transform(new Vector3f(params.tip()).mul(params.length())).add(bone.origin);
@@ -1074,8 +1310,13 @@ public final class PhysicsInstance {
 		}
 
 		if (bodies) {
-			for (Collider.Placed shape : this.others) {
-				if (Bodies.feels(params.collidesWith(), shape))
+			Set<String> layers = params.collidesWith();
+			boolean feelsOther = layers.contains(Bodies.OTHER);
+
+			for (int i = 0, n = this.nearOthers.size(); i < n; i++) {
+				Collider.Placed shape = this.nearOthers.get(i);
+
+				if (Bodies.feels(layers, feelsOther, shape))
 					moved |= Collider.pushOut(shape, this.contact, params.radius());
 			}
 		}
@@ -1192,6 +1433,9 @@ public final class PhysicsInstance {
 
 		for (ClothInstance cloth : this.cloths)
 			lines.add(String.format("cloth %s: %d particles, %d edges, worst edge length error %.2f%%, weight %.2f", cloth.name, cloth.particles(), cloth.topology.edgeA.length, cloth.worstEdgeError() * 100, cloth.active.weight()));
+
+		for (FleshInstance soft : this.softs)
+			lines.add(String.format("flesh %s: %d nodes, %d vertices, largest displacement %.3f of %.3f blocks, %d resting, %d pressing shapes near (the last region's), deepest %.3f, weight %.2f", soft.name, soft.nodes(), soft.vertices(), soft.largestDisplacement(), soft.limit(), soft.resting(), soft.pressing(), soft.deepestPress(), soft.active.weight()));
 
 		for (Bone bone : this.bones) {
 			lines.add(String.format("%s: rot (%.1f, %.1f, %.1f) deg, pos (%.2f, %.2f, %.2f) units, weight %.2f", bone.name,

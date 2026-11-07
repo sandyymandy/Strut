@@ -38,7 +38,7 @@ public final class GpuModelCache {
 	 * Returns {@code model}'s {@link GpuModel}, baking it via {@code GpuModel#bake} the first time
 	 * this identity is asked for
 	 */
-	public static GpuModel get(BakedStrutModel model) {
+	public static synchronized GpuModel get(BakedStrutModel model) {
 		return MODELS.computeIfAbsent(model, GpuModel::bake);
 	}
 
@@ -51,6 +51,9 @@ public final class GpuModelCache {
 	 * deletion is only safe from the thread that owns the GL context
 	 */
 	public static void registerReloadListener() {
+		// a model whose cubes were cut into meshes (for a soft body) is baked again from them; the old one may still be in a frame's queue, so it is closed with the rest
+		com.sandymandy.strut.cache.object.CubeMeshes.onConverted = GpuModelCache::retire;
+
 		ResourceManagerHelper.get(ResourceType.CLIENT_RESOURCES)
 				.registerReloadListener(new IdentifiableResourceReloadListener() {
 					@Override
@@ -74,7 +77,21 @@ public final class GpuModelCache {
 				});
 	}
 
-	private static void clear() {
+	private static final java.util.List<GpuModel> RETIRED = new java.util.ArrayList<>();
+
+	private static synchronized void retire(BakedStrutModel model) {
+		GpuModel old = MODELS.remove(model);
+
+		if (old != null)
+			RETIRED.add(old);
+	}
+
+	private static synchronized void clear() {
+		for (GpuModel model : RETIRED)
+			model.close();
+
+		RETIRED.clear();
+
 		for (GpuModel model : MODELS.values()) {
 			model.close();
 		}

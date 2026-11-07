@@ -2,6 +2,7 @@ package com.sandymandy.strut.animation;
 
 import com.sandymandy.strut.animation.authority.ClientAnimationState;
 import com.sandymandy.strut.animation.authority.ClientAnimationStates;
+import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ObjectOpenHashSet;
 import net.minecraft.entity.Entity;
@@ -69,9 +70,7 @@ public class AnimationProcessor<T extends StrutAnimatable> {
 	 * used to allocate three fresh {@link ObjectOpenHashSet}s for on every call - same reuse
 	 * reasoning as {@link #handleScratch}
 	 */
-	private final Set<BoneKey> rotationAnimatedThisTick = new ObjectOpenHashSet<>();
-	private final Set<BoneKey> positionAnimatedThisTick = new ObjectOpenHashSet<>();
-	private final Set<BoneKey> scaleAnimatedThisTick = new ObjectOpenHashSet<>();
+
 
 	/**
 	 * The baked model this processor's registered bones were flattened from
@@ -203,20 +202,16 @@ public class AnimationProcessor<T extends StrutAnimatable> {
 			instance.beginPoseUpdate(this.activeModel);
 
 		Map<BoneKey, PosableBone> handles = handlesByKey(instance);
-		Map<BoneKey, BoneSnapshot> boneSnapshots = updateBoneSnapshots(animatableManager.getBoneSnapshotCollection());
+		Map<BoneKey, BoneSnapshot> boneSnapshots = updateBoneSnapshots(animatableManager);
 
-		// Replaces the old per-bone dirty flags: a bone written by the animated branch below is
-		// recorded here for the reset pass at the bottom of this method, rather than marked on the
-		// bone itself. Reused fields, cleared here rather than allocated fresh - safe because this
-		// method runs one animatable to completion, including this tracking, before the next one
-		// starts (see the fields' own doc comment)
-		this.rotationAnimatedThisTick.clear();
-		this.positionAnimatedThisTick.clear();
-		this.scaleAnimatedThisTick.clear();
+		// A bone written by the animated branch below is marked for the reset pass at the bottom of this method. A new serial for this update unmarks every
+		// bone at once; safe because this method runs one animatable to completion before the next one starts
+		ensureOrder();
+		this.updateSerial++;
 
-		Set<BoneKey> rotationAnimatedThisTick = this.rotationAnimatedThisTick;
-		Set<BoneKey> positionAnimatedThisTick = this.positionAnimatedThisTick;
-		Set<BoneKey> scaleAnimatedThisTick = this.scaleAnimatedThisTick;
+		BoneMarks rotationAnimatedThisTick = this.rotationMarks;
+		BoneMarks positionAnimatedThisTick = this.positionMarks;
+		BoneMarks scaleAnimatedThisTick = this.scaleMarks;
 
 		// A server-driven entity registers no controllers: make one for each name the server is playing on
 		if (animatable instanceof Entity entity) {
@@ -243,9 +238,14 @@ public class AnimationProcessor<T extends StrutAnimatable> {
 			if (output != null)
 				output.clear();
 
-			for (Map.Entry<BoneKey, BoneAnimationQueue> entry : controller.getBoneAnimationQueues().entrySet()) {
-				BoneKey key = entry.getKey();
+			for (Map.Entry<BoneKey, BoneAnimationQueue> entry : FastMaps.entries(controller.boneAnimationQueuesForProcessing())) {
 				BoneAnimationQueue boneAnimation = entry.getValue();
+
+				// nothing for this bone from this controller this frame: the reset below sees to it
+				if (boneAnimation.isEmpty())
+					continue;
+
+				BoneKey key = entry.getKey();
 				PosableBone bone = boneAnimation.bone();
 				BoneSnapshot snapshot = boneSnapshots.get(key);
 				BoneSnapshot initialSnapshot = bone.getInitialSnapshot();
@@ -305,13 +305,26 @@ public class AnimationProcessor<T extends StrutAnimatable> {
 		this.reloadAnimations = false;
 		double resetTickLength = animatable.getBoneResetTime();
 
-		for (Map.Entry<BoneKey, PosableBone> entry : handles.entrySet()) {
-			BoneKey key = entry.getKey();
-			PosableBone bone = entry.getValue();
+		PosableBone[] orderedBones = instance.orderedHandles(this.registrationStamp);
+		BoneSnapshot[] orderedSnapshots = animatableManager.snapshotsInOrder;
+		int boneTotal = this.activeModel == null || orderedBones == null || orderedSnapshots == null ? 0 : this.orderedKeys.length;
 
-			if (!rotationAnimatedThisTick.contains(key)) {
+		for (int index = 0; index < boneTotal; index++) {
+			PosableBone bone = orderedBones[index];
+			BoneSnapshot boneSnapshot = orderedSnapshots[index];
+
+			if (bone == null || boneSnapshot == null)
+				continue;
+
+			// back at rest, and nothing has written it since: this pass would only write the values it already holds
+			if (boneSnapshot.isResting() && !bone.writtenSinceReset())
+				continue;
+
+			boolean rested = true;
+
+			if (!rotationAnimatedThisTick.has(index)) {
 				BoneSnapshot initialSnapshot = bone.getInitialSnapshot();
-				BoneSnapshot saveSnapshot = boneSnapshots.get(key);
+				BoneSnapshot saveSnapshot = boneSnapshot;
 
 				if (saveSnapshot.isRotAnimInProgress())
 					saveSnapshot.stopRotAnim(animTime);
@@ -349,11 +362,16 @@ public class AnimationProcessor<T extends StrutAnimatable> {
 
 				if (percentageReset >= 1)
 					saveSnapshot.updateRotation(bone.getRotX(), bone.getRotY(), bone.getRotZ());
+				else
+					rested = false;
+			}
+			else {
+				rested = false;
 			}
 
-			if (!positionAnimatedThisTick.contains(key)) {
+			if (!positionAnimatedThisTick.has(index)) {
 				BoneSnapshot initialSnapshot = bone.getInitialSnapshot();
-				BoneSnapshot saveSnapshot = boneSnapshots.get(key);
+				BoneSnapshot saveSnapshot = boneSnapshot;
 
 				if (saveSnapshot.isPosAnimInProgress())
 					saveSnapshot.stopPosAnim(animTime);
@@ -366,11 +384,16 @@ public class AnimationProcessor<T extends StrutAnimatable> {
 
 				if (percentageReset >= 1)
 					saveSnapshot.updateOffset(bone.getPosX(), bone.getPosY(), bone.getPosZ());
+				else
+					rested = false;
+			}
+			else {
+				rested = false;
 			}
 
-			if (!scaleAnimatedThisTick.contains(key)) {
+			if (!scaleAnimatedThisTick.has(index)) {
 				BoneSnapshot initialSnapshot = bone.getInitialSnapshot();
-				BoneSnapshot saveSnapshot = boneSnapshots.get(key);
+				BoneSnapshot saveSnapshot = boneSnapshot;
 
 				if (saveSnapshot.isScaleAnimInProgress())
 					saveSnapshot.stopScaleAnim(animTime);
@@ -383,7 +406,16 @@ public class AnimationProcessor<T extends StrutAnimatable> {
 
 				if (percentageReset >= 1)
 					saveSnapshot.updateScale(bone.getScaleX(), bone.getScaleY(), bone.getScaleZ());
+				else
+					rested = false;
 			}
+			else {
+				rested = false;
+			}
+
+			// what this pass wrote is dealt with; a write from anywhere else after this marks the bone again
+			bone.clearWritten();
+			boneSnapshot.setResting(rested);
 		}
 
 		// current is now fully written for this update - blend it with previous into rendered,
@@ -423,7 +455,8 @@ public class AnimationProcessor<T extends StrutAnimatable> {
 	 * A controller fading out: each bone it was animating goes from where it left it toward what the controllers before it gave the bone this frame, or the
 	 * bone's rest pose if none did, {@code progress} of the way
 	 */
-	private static void applyBlendOut(ControllerOutput output, float progress, Map<BoneKey, BoneSnapshot> snapshots, Set<BoneKey> rotated, Set<BoneKey> moved, Set<BoneKey> scaled) {
+	private static void applyBlendOut(ControllerOutput output, float progress, Map<BoneKey, BoneSnapshot> snapshots, AnimationProcessor<?>.BoneMarks rotated,
+									  AnimationProcessor<?>.BoneMarks moved, AnimationProcessor<?>.BoneMarks scaled) {
 		for (Map.Entry<BoneKey, ControllerOutput.Bone> entry : output.entries()) {
 			BoneKey key = entry.getKey();
 			ControllerOutput.Bone from = entry.getValue();
@@ -477,16 +510,34 @@ public class AnimationProcessor<T extends StrutAnimatable> {
 	 * @param snapshots The master bone snapshots map from the related {@link AnimatableManager}
 	 * @return The input snapshots map, for easy assignment
 	 */
-	private Map<BoneKey, BoneSnapshot> updateBoneSnapshots(Map<BoneKey, BoneSnapshot> snapshots) {
-		for (Map.Entry<BoneKey, GroupBoneDefinition> entry : this.boneHandleKeys.entrySet()) {
+	private Map<BoneKey, BoneSnapshot> updateBoneSnapshots(AnimatableManager<T> manager) {
+		Map<BoneKey, BoneSnapshot> snapshots = manager.getBoneSnapshotCollection();
+
+		// filled for these bones already, from this map, and nothing taken out since
+		if (manager.snapshotsMadeFor == this.registrationStamp && manager.snapshotsMadeFrom == snapshots && manager.snapshotsInOrder != null
+				&& snapshots.size() >= this.boneHandleKeys.size() + this.armatureHandleKeys.size())
+			return snapshots;
+
+		ensureOrder();
+
+		for (Map.Entry<BoneKey, GroupBoneDefinition> entry : FastMaps.entries(this.boneHandleKeys)) {
 			if (!snapshots.containsKey(entry.getKey()))
 				snapshots.put(entry.getKey(), BoneSnapshot.copy(entry.getValue().getInitialSnapshot()));
 		}
 
-		for (Map.Entry<BoneKey, ArmatureBoneRegistration> entry : this.armatureHandleKeys.entrySet()) {
+		for (Map.Entry<BoneKey, ArmatureBoneRegistration> entry : FastMaps.entries(this.armatureHandleKeys)) {
 			if (!snapshots.containsKey(entry.getKey()))
 				snapshots.put(entry.getKey(), BoneSnapshot.copy(entry.getValue().definition().getInitialSnapshot()));
 		}
+
+		BoneSnapshot[] ordered = new BoneSnapshot[this.orderedKeys.length];
+
+		for (int i = 0; i < ordered.length; i++)
+			ordered[i] = snapshots.get(this.orderedKeys[i]);
+
+		manager.snapshotsInOrder = ordered;
+		manager.snapshotsMadeFrom = snapshots;
+		manager.snapshotsMadeFor = this.registrationStamp;
 
 		return snapshots;
 	}
@@ -502,25 +553,115 @@ public class AnimationProcessor<T extends StrutAnimatable> {
 	 * no longer do
 	 */
 	private Map<BoneKey, PosableBone> handlesByKey(ModelInstance instance) {
-		this.handleScratch.clear();
+		if (this.activeModel == null) {
+			this.handleScratch.clear();
 
-		if (this.activeModel == null)
 			return this.handleScratch;
-
-		GroupBoneHandle[] flatHandles = instance.handlesFor(this.activeModel);
-
-		for (Map.Entry<BoneKey, GroupBoneDefinition> entry : this.boneHandleKeys.entrySet()) {
-			this.handleScratch.put(entry.getKey(), flatHandles[entry.getValue().getIndex()]);
 		}
 
-		for (Map.Entry<BoneKey, ArmatureBoneRegistration> entry : this.armatureHandleKeys.entrySet()) {
+		// binds the instance to the model first, so the map below is made for the handles it will keep
+		GroupBoneHandle[] flatHandles = instance.handlesFor(this.activeModel);
+		Map<BoneKey, PosableBone> kept = instance.handleMap(this.registrationStamp);
+
+		if (kept != null)
+			return kept;
+
+		Map<BoneKey, PosableBone> handles = new Object2ObjectOpenHashMap<>(this.boneHandleKeys.size() + this.armatureHandleKeys.size());
+
+		for (Map.Entry<BoneKey, GroupBoneDefinition> entry : FastMaps.entries(this.boneHandleKeys)) {
+			handles.put(entry.getKey(), flatHandles[entry.getValue().getIndex()]);
+		}
+
+		for (Map.Entry<BoneKey, ArmatureBoneRegistration> entry : FastMaps.entries(this.armatureHandleKeys)) {
 			ArmatureBoneRegistration registration = entry.getValue();
 
-			this.handleScratch.put(entry.getKey(),
-					instance.armatureHandleFor(this.activeModel, registration.armature(), registration.definition()));
+			handles.put(entry.getKey(), instance.armatureHandleFor(this.activeModel, registration.armature(), registration.definition()));
 		}
 
-		return this.handleScratch;
+		ensureOrder();
+
+		PosableBone[] ordered = new PosableBone[this.orderedKeys.length];
+
+		for (int i = 0; i < ordered.length; i++)
+			ordered[i] = handles.get(this.orderedKeys[i]);
+
+		instance.setHandleMap(this.registrationStamp, handles, ordered);
+
+		return handles;
+	}
+
+	/**
+	 * Changes whenever the registered bones do, so what was made from them for an instance (its map of handles, its snapshots) is made again. A new object each
+	 * time: only its identity matters
+	 */
+	private Object registrationStamp = new Object();
+
+	/** The registered bones in one fixed order (group bones, then armature bones), each one's place in it, and the stamp they were made for */
+	private BoneKey[] orderedKeys = new BoneKey[0];
+	private final Object2IntOpenHashMap<BoneKey> keyIndex = new Object2IntOpenHashMap<>();
+	private Object orderedFor;
+
+	/**
+	 * Which bones the animated branch of {@link #tickAnimation} wrote this update, by place in {@link #orderedKeys}: a bone was written when its mark is
+	 * {@link #updateSerial}, which every update moves on, so nothing has to be cleared between updates
+	 */
+	private final BoneMarks rotationMarks = new BoneMarks();
+	private final BoneMarks positionMarks = new BoneMarks();
+	private final BoneMarks scaleMarks = new BoneMarks();
+	private int updateSerial;
+
+	private final class BoneMarks {
+		private int[] marks = new int[0];
+
+		void resize(int size) {
+			if (this.marks.length != size)
+				this.marks = new int[size];
+		}
+
+		boolean has(int index) {
+			return this.marks[index] == AnimationProcessor.this.updateSerial;
+		}
+
+		boolean contains(BoneKey key) {
+			int index = AnimationProcessor.this.keyIndex.getInt(key);
+
+			return index >= 0 && has(index);
+		}
+
+		void add(BoneKey key) {
+			int index = AnimationProcessor.this.keyIndex.getInt(key);
+
+			if (index >= 0)
+				this.marks[index] = AnimationProcessor.this.updateSerial;
+		}
+	}
+
+	/** Makes {@link #orderedKeys} again for the bones registered now, if they changed */
+	private void ensureOrder() {
+		if (this.orderedFor == this.registrationStamp)
+			return;
+
+		BoneKey[] keys = new BoneKey[this.boneHandleKeys.size() + this.armatureHandleKeys.size()];
+		int i = 0;
+
+		this.keyIndex.clear();
+		this.keyIndex.defaultReturnValue(-1);
+
+		for (Map.Entry<BoneKey, GroupBoneDefinition> entry : FastMaps.entries(this.boneHandleKeys)) {
+			this.keyIndex.put(entry.getKey(), i);
+			keys[i++] = entry.getKey();
+		}
+
+		for (Map.Entry<BoneKey, ArmatureBoneRegistration> entry : FastMaps.entries(this.armatureHandleKeys)) {
+			this.keyIndex.put(entry.getKey(), i);
+			keys[i++] = entry.getKey();
+		}
+
+		this.orderedKeys = keys;
+		this.rotationMarks.resize(keys.length);
+		this.positionMarks.resize(keys.length);
+		this.scaleMarks.resize(keys.length);
+		this.orderedFor = this.registrationStamp;
 	}
 
 	/**
@@ -541,6 +682,7 @@ public class AnimationProcessor<T extends StrutAnimatable> {
 	 * Failure to properly register a bone will break things.
 	 */
 	public void registerStrutBone(GroupBoneDefinition bone) {
+		this.registrationStamp = new Object();
 		bone.saveInitialSnapshot();
 		this.bones.put(bone.getName(), bone);
 		this.boneHandleKeys.put(BoneKey.group(bone.getName()), bone);
@@ -563,6 +705,7 @@ public class AnimationProcessor<T extends StrutAnimatable> {
 		this.armatureHandleKeys.clear();
 		this.fingerprintMismatchesWarned.clear();
 		this.activeModel = model;
+		this.registrationStamp = new Object();
 
 		for (GroupBoneDefinition bone : model.topLevelBones()) {
 			registerStrutBone(bone);

@@ -55,14 +55,26 @@ public final class PhysicsStats {
 	private static int admitted;
 	private static int lastAdmitted;
 	private static long heldFrame = -1;
-	/** Every how many frames each instance takes its turn, worked out from the last frame: 1 while everyone fits in the budget */
+	/** What one instance's turn cost, as last measured, nanoseconds; 0 before any */
+	private static double each;
+	/** Every how many frames each instance past the near ones takes its turn, worked out from the last frame: 1 while everyone fits in the budget */
 	private static int cadence = 1;
+	/** How near the camera an instance must be to have its turn every frame, blocks, worked out from the last frame */
+	private static double nearDistance = Double.MAX_VALUE;
+	private static int near;
+	/** The distances of the instances that asked this frame, and the last frame's */
+	private static double[] distances = new double[64];
+	private static double[] lastDistances = new double[64];
+	private static int ranked;
+	private static int lastRanked;
+	/** Whether everyone had their turn last frame within the budget */
+	private static boolean allFit = true;
 
 	/** What an instance may do this frame, see {@link #admit} */
 	public enum Turn {
 		/** All the steps the clock calls for */
 		FULL,
-		/** One step, then the clock is let go of (it was held before) */
+		/** A few steps, then the clock is let go of (it was held before) */
 		ONE,
 		/** Nothing: its last result is drawn again */
 		HOLD
@@ -74,13 +86,45 @@ public final class PhysicsStats {
 			lastCandidates = candidates;
 			lastAdmitted = admitted;
 
+			double[] swap = lastDistances;
+
+			lastDistances = distances;
+			distances = swap;
+			lastRanked = ranked;
+			ranked = 0;
+
 			// how many instance turns the budget pays for, from what the turns cost last frame
 			double budget = PhysicsOptions.quality().budgetMillis * 1_000_000.0;
 			// (called by the frame's first turn, before anything of the frame is recorded: the totals still are the frame before's)
-			double each = lastAdmitted > 0 ? Math.max(1.0, nanos / (double)lastAdmitted) : 0.0;
+			// (a frame in which nobody was due says nothing about the cost: the last known one is kept)
+			if (lastAdmitted > 0)
+				each = Math.max(1.0, nanos / (double)lastAdmitted);
+
 			double fit = each > 0.0 ? budget / each : Double.MAX_VALUE;
 
-			cadence = lastCandidates <= 0 || fit >= lastCandidates ? 1 : Math.min(MAX_CADENCE, (int)Math.ceil(lastCandidates / Math.max(1.0, fit)));
+			allFit = lastCandidates <= 0 || fit >= lastCandidates;
+
+			if (allFit) {
+				cadence = 1;
+				near = lastCandidates;
+				nearDistance = Double.MAX_VALUE;
+			}
+			else {
+				// the nearest have their turn every frame, as many as most of the budget pays for (and always a few); the rest share what is left
+				// (only those whose distance is known can be nearest)
+				near = Math.min(lastRanked, Math.max(MIN_NEAR, (int)(fit * NEAR_SHARE)));
+
+				double[] sorted = java.util.Arrays.copyOf(lastDistances, lastRanked);
+
+				java.util.Arrays.sort(sorted);
+				nearDistance = near > 0 ? sorted[near - 1] : -1;
+
+				int far = lastCandidates - near;
+				double left = Math.max(1.0, fit - near);
+
+				cadence = far <= left ? 1 : Math.min(MAX_CADENCE, (int)Math.ceil(far / left));
+			}
+
 			heldBack = 0;
 			candidates = 0;
 			admitted = 0;
@@ -89,25 +133,57 @@ public final class PhysicsStats {
 	}
 
 	/** The most frames an instance waits for its turn: past this the crowd is left over budget rather than frozen */
-	public static final int MAX_CADENCE = 6;
+	public static final int MAX_CADENCE = 12;
+	/** The fewest instances that have their turn every frame, whatever the crowd, and the share of the budget the nearest are given */
+	public static final int MIN_NEAR = 4;
+	/** Farther than this from the camera, blocks, an instance may wait up to {@link #MAX_FAR_CADENCE} frames */
+	public static final double FAR = 16;
+	public static final int MAX_FAR_CADENCE = 30;
+	private static final double NEAR_SHARE = 0.6;
+
+	/** {@link #admit(int, double, boolean)} for an instance whose distance is not known: it waits with the far ones */
+	public static Turn admit(int starved) {
+		return admit(starved, Double.MAX_VALUE, false);
+	}
 
 	/**
-	 * What an instance may do this frame, so a crowd of cloths or ragdolls cannot take the frame whole. While everyone fits in the quality level's budget each
-	 * instance has its full turn every frame. When the crowd is bigger than the budget pays for, each takes its turn every few frames instead (the cadence,
-	 * worked out from what a turn cost the frame before) and draws its last result again in between, which costs nothing. Instances start at different points
-	 * of the cadence, so the turns are spread over the frames. And as a safety, once a frame has spent the whole budget the instances after it hold
+	 * What an instance may do this frame, so a crowd of flesh, cloth or ragdolls cannot take the frame whole, and the ones nearest the camera stay smooth. While
+	 * everyone fits in the quality level's budget each instance has its full turn every frame. When the crowd is bigger, the camera's own model and the nearest
+	 * (as many as most of the budget pays for, and never fewer than {@link #MIN_NEAR}) still have theirs every frame, and the others take theirs every few frames
+	 * (the cadence, worked out from what a turn cost the frame before), drawing their last result again in between, which costs nothing. They start at different
+	 * points of the cadence, so their turns are spread over the frames. And as a safety, once a frame has spent the whole budget the far ones after it hold
 	 * (except one that has waited the most it may)
 	 *
 	 * @param starved How many frames in a row this instance has been held
+	 * @param distance How far it is from the camera, blocks
+	 * @param viewer Whether it is the camera's own model (the player seen from behind, or in a mirror): never held
 	 */
-	public static Turn admit(int starved) {
+	public static Turn admit(int starved, double distance, boolean viewer) {
 		rollTurns();
+
 		candidates++;
 
-		boolean over = seen == frame && nanos > PhysicsOptions.quality().budgetMillis * 1_000_000.0;
-		boolean due = starved >= cadence - 1;
+		// the camera's own model has its turn whatever the crowd, and is not one of the nearest the budget pays for
+		if (!viewer && distance < Double.MAX_VALUE) {
+			if (ranked >= distances.length)
+				distances = java.util.Arrays.copyOf(distances, distances.length * 2);
 
-		if (!due || (over && starved < MAX_CADENCE)) {
+			distances[ranked++] = distance;
+		}
+
+		if (viewer || allFit || (distance < Double.MAX_VALUE && distance <= nearDistance)) {
+			admitted++;
+
+			return starved > 0 ? Turn.ONE : Turn.FULL;
+		}
+
+		boolean over = seen == frame && nanos > PhysicsOptions.quality().budgetMillis * 1_000_000.0;
+		// far off, where it is a few pixels, an instance may wait twice as long
+		boolean far = distance > FAR && distance < Double.MAX_VALUE;
+		int wait = far ? Math.min(MAX_FAR_CADENCE, cadence * 2) : cadence;
+		boolean due = starved >= wait - 1;
+
+		if (!due || (over && starved < (far ? MAX_FAR_CADENCE : MAX_CADENCE))) {
 			heldBack++;
 
 			return Turn.HOLD;
@@ -121,6 +197,12 @@ public final class PhysicsStats {
 	/** Forgets what the frames before cost, so the next ones start from every instance having its turn (a test, or physics switched back on) */
 	public static void reset() {
 		cadence = 1;
+		nearDistance = Double.MAX_VALUE;
+		near = 0;
+		each = 0;
+		ranked = 0;
+		lastRanked = 0;
+		allFit = true;
 		candidates = 0;
 		lastCandidates = 0;
 		admitted = 0;
@@ -145,7 +227,7 @@ public final class PhysicsStats {
 
 		lines.add(String.format("physics: %s (%s), %d instances, %d spring bones, %d steps, %.3f ms%s", PhysicsOptions.enabled() ? "on" : "OFF",
 				PhysicsOptions.quality().name().toLowerCase(Locale.ROOT), lastInstances, lastBones, lastSteps, lastNanos / 1_000_000.0,
-				lastHeldBack > 0 ? ", " + lastHeldBack + " waiting their turn (every " + cadence + " frames)" : ""));
+				lastHeldBack > 0 ? ", the nearest " + near + " every frame, " + lastHeldBack + " others waiting their turn (every " + cadence + " frames)" : ""));
 
 		String fluid = FluidSystem.line();
 

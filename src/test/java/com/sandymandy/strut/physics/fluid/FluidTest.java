@@ -13,7 +13,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import com.sandymandy.strut.physics.collision.Collider;
 
 /**
- * The thick liquid: soft particles that cling, and the metaball surface drawn around them
+ * The fluid: soft particles that cling, and the metaball surface drawn around them
  */
 class FluidTest {
 	private static Collider.Placed box(double cx, double cy, double cz, double hx, double hy, double hz) {

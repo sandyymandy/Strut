@@ -62,4 +62,50 @@ class PhysicsBudgetTest {
 			PhysicsStats.record(10, 1, 1000);
 		}
 	}
+
+	@Test
+	void overTheBudgetTheNearestAndTheViewerHaveTheirTurnEveryFrame() {
+		int crowd = 40;
+		int[] starved = new int[crowd];
+		int[] heldNear = {0};
+		int[] heldViewer = {0};
+		int[] heldFar = {0};
+		long cost = (long)(PhysicsOptions.quality().budgetMillis * 1_000_000.0 / 5);
+
+		for (int i = 0; i < crowd; i++)
+			starved[i] = i % PhysicsStats.MAX_CADENCE;
+
+		for (int frame = 0; frame < 60; frame++) {
+			PhysicsStats.nextFrame();
+
+			// instance i stands i blocks away; the last one is the camera's own model, standing farthest of all
+			for (int i = 0; i < crowd; i++) {
+				boolean viewer = i == crowd - 1;
+				PhysicsStats.Turn turn = PhysicsStats.admit(starved[i], i, viewer);
+
+				if (turn == PhysicsStats.Turn.HOLD) {
+					starved[i]++;
+
+					if (frame > 2) {
+						if (viewer)
+							heldViewer[0]++;
+						else if (i < PhysicsStats.MIN_NEAR)
+							heldNear[0]++;
+						else
+							heldFar[0]++;
+					}
+
+					PhysicsStats.record(0, 0, 0);
+				}
+				else {
+					starved[i] = 0;
+					PhysicsStats.record(10, 1, cost);
+				}
+			}
+		}
+
+		assertEquals(0, heldNear[0], "the nearest are never held");
+		assertEquals(0, heldViewer[0], "the camera's own model is never held");
+		assertTrue(heldFar[0] > 0, "the far ones wait their turn");
+	}
 }

@@ -19,6 +19,7 @@ import com.sandymandy.strut.physics.solver.ChainParams;
 import com.sandymandy.strut.physics.solver.ClothParams;
 import com.sandymandy.strut.physics.solver.RagdollParams;
 import com.sandymandy.strut.physics.solver.SpringParams;
+import com.sandymandy.strut.physics.flesh.FleshParams;
 
 /**
  * A model's physics tuning, read from JSON: the same text whether it comes from the model file's {@code strut_physics:physics} extension section or from a
@@ -43,6 +44,7 @@ public final class PhysicsConfig {
 	private final Map<String, SpringParams> bones;
 	private final Map<String, ChainParams> chains;
 	private final Map<String, ClothParams> cloth;
+	private final Map<String, FleshParams> flesh;
 	private final List<Collider> colliders;
 	private final List<String> warnings;
 	private final AutoColliders.Options auto;
@@ -70,9 +72,10 @@ public final class PhysicsConfig {
 		}
 	}
 
-	private PhysicsConfig(Map<String, SpringParams> bones, Map<String, ChainParams> chains, Map<String, ClothParams> cloth, List<Collider> colliders, List<String> warnings,
-			AutoColliders.Options auto, RagdollParams ragdoll, Map<String, BoneFilter> filters) {
+	private PhysicsConfig(Map<String, SpringParams> bones, Map<String, ChainParams> chains, Map<String, ClothParams> cloth, Map<String, FleshParams> flesh,
+			List<Collider> colliders, List<String> warnings, AutoColliders.Options auto, RagdollParams ragdoll, Map<String, BoneFilter> filters) {
 		this.cloth = cloth;
+		this.flesh = flesh;
 		this.filters = filters;
 		this.ragdoll = ragdoll;
 		this.auto = auto;
@@ -90,6 +93,11 @@ public final class PhysicsConfig {
 	/** The cloths (a skirt, a cape) by name, in file order */
 	public Map<String, ClothParams> cloth() {
 		return this.cloth;
+	}
+
+	/** The flesh entries (a pair of pouches, a bottom, a belly, a jelly) by name, in file order */
+	public Map<String, FleshParams> flesh() {
+		return this.flesh;
 	}
 
 	/** The bone filter of a spring bone, chain or cloth by its name (never null) */
@@ -122,7 +130,7 @@ public final class PhysicsConfig {
 	}
 
 	public boolean isEmpty() {
-		return this.bones.isEmpty() && this.chains.isEmpty() && this.cloth.isEmpty() && this.ragdoll == null;
+		return this.bones.isEmpty() && this.chains.isEmpty() && this.cloth.isEmpty() && this.flesh.isEmpty() && this.ragdoll == null;
 	}
 
 	static final SpringParams BASE = new SpringParams(2f, 0.25f, 1f, 0f, true, false, new Vector3f(0, -1, 0), 0.15f, null, 0f, 1f, 1f, Set.of(), 0.1f, 0f);
@@ -145,7 +153,7 @@ public final class PhysicsConfig {
 	}
 
 	public static PhysicsConfig empty() {
-		return new PhysicsConfig(new LinkedHashMap<>(), new LinkedHashMap<>(), new LinkedHashMap<>(), new ArrayList<>(), new ArrayList<>(), null, null, new LinkedHashMap<>());
+		return new PhysicsConfig(new LinkedHashMap<>(), new LinkedHashMap<>(), new LinkedHashMap<>(), new LinkedHashMap<>(), new ArrayList<>(), new ArrayList<>(), null, null, new LinkedHashMap<>());
 	}
 
 	/**
@@ -156,6 +164,7 @@ public final class PhysicsConfig {
 		Map<String, SpringParams> bones = new LinkedHashMap<>();
 		Map<String, ChainParams> chains = new LinkedHashMap<>();
 		Map<String, ClothParams> cloth = new LinkedHashMap<>();
+		Map<String, FleshParams> soft = new LinkedHashMap<>();
 		List<Collider> colliders = new ArrayList<>();
 		AutoColliders.Options[] auto = {null};
 		RagdollParams[] ragdoll = {null};
@@ -166,7 +175,7 @@ public final class PhysicsConfig {
 			JsonObject defaults = root.has("defaults") ? root.getAsJsonObject("defaults") : new JsonObject();
 
 			for (String key : root.keySet()) {
-				if (!key.equals("defaults") && !key.equals("bones") && !key.equals("version") && !key.equals("chains") && !key.equals("cloth") && !key.equals("flesh") && !key.equals("colliders") && !key.equals("autoColliders") && !key.equals("ragdoll"))
+				if (!key.equals("defaults") && !key.equals("bones") && !key.equals("version") && !key.equals("chains") && !key.equals("cloth") && !key.equals("flesh") && !key.equals("soft") && !key.equals("colliders") && !key.equals("autoColliders") && !key.equals("ragdoll"))
 					warnings.add(source + ": unknown top-level key \"" + key + "\"");
 			}
 
@@ -190,15 +199,33 @@ public final class PhysicsConfig {
 
 			if (root.has("cloth")) {
 				for (Map.Entry<String, JsonElement> entry : root.getAsJsonObject("cloth").entrySet()) {
-					readCloth(entry.getKey(), entry.getValue().getAsJsonObject(), source, warnings, cloth, false);
+					readCloth(entry.getKey(), entry.getValue().getAsJsonObject(), source, warnings, cloth);
 					readFilter(entry.getKey(), entry.getValue().getAsJsonObject(), source + " cloth \"" + entry.getKey() + "\"", warnings, filters);
 				}
 			}
 
-			if (root.has("flesh")) {
-				for (Map.Entry<String, JsonElement> entry : root.getAsJsonObject("flesh").entrySet()) {
-					readCloth(entry.getKey(), entry.getValue().getAsJsonObject(), source, warnings, cloth, true);
-					readFilter(entry.getKey(), entry.getValue().getAsJsonObject(), source + " flesh \"" + entry.getKey() + "\"", warnings, filters);
+			// flesh is what a soft part is called; "soft" is its old name and reads the same
+			for (String section : new String[] {"flesh", "soft"}) {
+				if (!root.has(section))
+					continue;
+
+				if (section.equals("soft"))
+					warnings.add(source + ": the \"soft\" section is now called \"flesh\"; it still reads the same");
+
+				for (Map.Entry<String, JsonElement> entry : root.getAsJsonObject(section).entrySet()) {
+					readFlesh(entry.getKey(), entry.getValue().getAsJsonObject(), source, warnings, soft, section);
+					readFilter(entry.getKey(), entry.getValue().getAsJsonObject(), source + " " + section + " \"" + entry.getKey() + "\"", warnings, filters);
+				}
+			}
+
+			if (!soft.isEmpty()) {
+
+				// a bone is moved by one thing: a spring bone on a soft body's root would fight it
+				for (FleshParams params : soft.values()) {
+					for (String bone : params.bones()) {
+						if (bones.remove(bone) != null)
+							warnings.add(source + ": bone \"" + bone + "\" is both a spring bone and a soft body; the soft body moves it");
+					}
 				}
 			}
 
@@ -220,12 +247,13 @@ public final class PhysicsConfig {
 			bones.clear();
 			chains.clear();
 			cloth.clear();
+			soft.clear();
 			colliders.clear();
 			auto[0] = null;
 			ragdoll[0] = null;
 		}
 
-		return new PhysicsConfig(bones, chains, cloth, colliders, warnings, auto[0], ragdoll[0], filters);
+		return new PhysicsConfig(bones, chains, cloth, soft, colliders, warnings, auto[0], ragdoll[0], filters);
 	}
 
 	/**
@@ -235,16 +263,22 @@ public final class PhysicsConfig {
 		Map<String, SpringParams> merged = new LinkedHashMap<>(this.bones);
 		Map<String, ChainParams> mergedChains = new LinkedHashMap<>(this.chains);
 		Map<String, ClothParams> mergedCloth = new LinkedHashMap<>(this.cloth);
+		Map<String, FleshParams> mergedFlesh = new LinkedHashMap<>(this.flesh);
 		List<Collider> mergedColliders = new ArrayList<>(this.colliders);
 		List<String> warnings = new ArrayList<>(this.warnings);
 
 		merged.putAll(overlay.bones);
 		mergedChains.putAll(overlay.chains);
 		mergedCloth.putAll(overlay.cloth);
+		mergedFlesh.putAll(overlay.flesh);
 		mergedColliders.addAll(overlay.colliders);
 		warnings.addAll(overlay.warnings);
 
-		return new PhysicsConfig(merged, mergedChains, mergedCloth, mergedColliders, warnings, overlay.auto != null ? overlay.auto : this.auto,
+		// a bone the overlay makes flesh is not also a spring bone
+		for (FleshParams params : overlay.flesh.values())
+			params.bones().forEach(merged::remove);
+
+		return new PhysicsConfig(merged, mergedChains, mergedCloth, mergedFlesh, mergedColliders, warnings, overlay.auto != null ? overlay.auto : this.auto,
 				overlay.ragdoll != null ? overlay.ragdoll : this.ragdoll, mergedFilters(overlay));
 	}
 
@@ -255,6 +289,7 @@ public final class PhysicsConfig {
 		overlay.bones.keySet().forEach(merged::remove);
 		overlay.chains.keySet().forEach(merged::remove);
 		overlay.cloth.keySet().forEach(merged::remove);
+		overlay.flesh.keySet().forEach(merged::remove);
 		merged.putAll(overlay.filters);
 
 		return merged;
@@ -560,13 +595,9 @@ public final class PhysicsConfig {
 	}
 
 	private static final Map<String, JsonObject> CLOTH_PRESETS = new LinkedHashMap<>();
-	private static final Map<String, JsonObject> FLESH_PRESETS = new LinkedHashMap<>();
 
 	static {
 		CLOTH_PRESETS.put("cloth", JsonParser.parseString("{\"stiffness\": 0.9, \"bend\": 0.15, \"damping\": 0.6, \"gravity\": 9.8, \"inertia\": 0.6}").getAsJsonObject());
-		FLESH_PRESETS.put("flesh-soft", JsonParser.parseString("{\"anchor\": 10, \"damping\": 2.5, \"volume\": 0.6, \"inertia\": 0.9}").getAsJsonObject());
-		FLESH_PRESETS.put("flesh-firm", JsonParser.parseString("{\"anchor\": 25, \"damping\": 5, \"volume\": 0.4, \"inertia\": 0.8}").getAsJsonObject());
-		FLESH_PRESETS.put("jelly", JsonParser.parseString("{\"anchor\": 4, \"damping\": 1.2, \"volume\": 0.9, \"inertia\": 1.0, \"gravity\": 1.5}").getAsJsonObject());
 		CLOTH_PRESETS.put("cloth-silk", JsonParser.parseString("{\"stiffness\": 0.8, \"bend\": 0.0, \"damping\": 0.4, \"gravity\": 7, \"inertia\": 0.7}").getAsJsonObject());
 		CLOTH_PRESETS.put("cloth-stiff", JsonParser.parseString("{\"stiffness\": 1.0, \"bend\": 0.6, \"damping\": 1.5, \"gravity\": 9.8, \"anchor\": 3, \"inertia\": 0.5}").getAsJsonObject());
 	}
@@ -578,8 +609,8 @@ public final class PhysicsConfig {
 	 * height, from the top, sewn to the bone), {@code anchor}, {@code weight}, {@code friction}, {@code iterations}, {@code maxParticles} and {@code collidesWith}
 	 * (layer names; default {@code ["body", "world"]})
 	 */
-	private static void readCloth(String name, JsonObject object, String source, List<String> warnings, Map<String, ClothParams> cloth, boolean flesh) {
-		String where = source + (flesh ? " flesh \"" : " cloth \"") + name + "\"";
+	private static void readCloth(String name, JsonObject object, String source, List<String> warnings, Map<String, ClothParams> cloth) {
+		String where = source + " cloth \"" + name + "\"";
 
 		if (!object.has("bone")) {
 			warnings.add(where + ": needs a \"bone\" whose mesh is the cloth; skipped");
@@ -589,13 +620,13 @@ public final class PhysicsConfig {
 
 		JsonObject merged = new JsonObject();
 
-		Map<String, JsonObject> presets = flesh ? FLESH_PRESETS : CLOTH_PRESETS;
+		Map<String, JsonObject> presets = CLOTH_PRESETS;
 
 		if (object.has("preset")) {
 			JsonObject preset = presets.get(object.get("preset").getAsString());
 
 			if (preset == null)
-				warnings.add(where + ": unknown " + (flesh ? "flesh" : "cloth") + " preset \"" + object.get("preset").getAsString() + "\" (known: " + String.join(", ", presets.keySet()) + ")");
+				warnings.add(where + ": unknown " + "cloth" + " preset \"" + object.get("preset").getAsString() + "\" (known: " + String.join(", ", presets.keySet()) + ")");
 			else
 				preset.entrySet().forEach(e -> merged.add(e.getKey(), e.getValue()));
 		}
@@ -604,24 +635,23 @@ public final class PhysicsConfig {
 
 		String bone = object.get("bone").getAsString();
 		int mesh = -1;
-		float stiffness = flesh ? 0.95f : 0.9f;
-		float bend = flesh ? 0f : 0.15f;
-		float damping = flesh ? 3f : 0.6f;
-		float inertia = flesh ? 0.9f : 0.6f;
-		float gravity = flesh ? 2f : 9.8f;
+		float stiffness = 0.9f;
+		float bend = 0.15f;
+		float damping = 0.6f;
+		float inertia = 0.6f;
+		float gravity = 9.8f;
 		float radius = 0.02f;
-		float pinHeight = flesh ? 0f : 0.1f;
-		float anchor = flesh ? 12f : 0f;
+		float pinHeight = 0.1f;
+		float anchor = 0f;
 		float weight = 1f;
 		float friction = 0.3f;
-		int iterations = flesh ? 4 : 6;
+		int iterations = 6;
 		int maxParticles = 600;
-		float volume = flesh ? 0.6f : 0f;
+		float volume = 0f;
 		float[] softCenter = null;
 		float softRadius = 0f;
 		List<String> carry = new ArrayList<>();
-		// flesh is pressed by other bodies and players by default: it is already part of the body it belongs to
-		Set<String> collides = new LinkedHashSet<>(flesh ? List.of("other", "players", "mobs", "world") : List.of("body", "world"));
+		Set<String> collides = new LinkedHashSet<>(List.of("body", "world"));
 
 		for (Map.Entry<String, JsonElement> entry : merged.entrySet()) {
 			JsonElement v = entry.getValue();
@@ -662,6 +692,275 @@ public final class PhysicsConfig {
 		}
 
 		cloth.put(name, new ClothParams(bone, mesh, stiffness, bend, damping, inertia, gravity, radius, pinHeight, anchor, weight, collides, friction, iterations, maxParticles, volume, softCenter, softRadius, carry));
+	}
+
+	private static final Map<String, JsonObject> SOFT_PRESETS = new LinkedHashMap<>();
+
+	static {
+		SOFT_PRESETS.put("pouch", JsonParser.parseString("{}").getAsJsonObject());
+		SOFT_PRESETS.put("seat", JsonParser.parseString("{\"anchorFrom\": 0.55, \"reach\": 0.8, \"shapeSoftness\": 0.75, \"firmness\": 1.1547, \"volume\": 0.4, \"rim\": 0.3}").getAsJsonObject());
+		SOFT_PRESETS.put("belly", JsonParser.parseString("{\"anchorFrom\": 0.55, \"limit\": 0.1, \"firmness\": 1.3, \"volume\": 0.3, \"rigid\": 0.5, \"rim\": 0, \"rise\": 0.03}").getAsJsonObject());
+		SOFT_PRESETS.put("thigh", JsonParser.parseString("{\"anchorFrom\": 0.5, \"limit\": 0.08, \"firmness\": 1.5, \"volume\": 0.2, \"rigid\": 0.3, \"rim\": 0, \"rise\": 0.02}").getAsJsonObject());
+		// the old flesh presets, as they read on the cage: soft is softer than a pouch, firm firmer and travelling less
+		SOFT_PRESETS.put("flesh-soft", JsonParser.parseString("{\"softness\": 1.3, \"volume\": 0.6}").getAsJsonObject());
+		SOFT_PRESETS.put("flesh-firm", JsonParser.parseString("{\"softness\": 0.7, \"firmness\": 1.4, \"limit\": 0.1, \"volume\": 0.4}").getAsJsonObject());
+		SOFT_PRESETS.put("jelly", JsonParser.parseString("{\"limit\": 0.25, \"firmness\": 0.8, \"lumpDamping\": 0.12, \"nodeDamping\": 0.2, \"volume\": 0.8, \"meat\": 0}").getAsJsonObject());
+	}
+
+	/**
+	 * {@code "soft": {"pouches": {"preset": "pouch", "bones": ["pouchL", "pouchR"]}}}: the meshes on the bones (and under them) moved by a soft body, a cage
+	 * fitted to them that swings, lags, presses and bulges. One bone is a region on its own; two are a left and right pair that press on each other. Keys:
+	 * {@code bones} (required), {@code preset} ({@code pouch}, the default, {@code seat}, {@code belly}, {@code thigh}, {@code jelly}), {@code softness},
+	 * {@code shapeSoftness}, {@code limit} (blocks), {@code reach}, {@code tip} and {@code up} ({@code "auto"}, or {@code "+z"}, {@code "-y"}... in the root
+	 * bone's space), {@code anchor} ({@code from}, {@code hold}, {@code full}, {@code depth} [from, to]), {@code lump} ({@code damping}, {@code inertia},
+	 * {@code share}, {@code side}, {@code stiffen}), {@code node} ({@code damping}, {@code shape}, {@code link}, {@code gravity}), {@code squeeze} ({@code in},
+	 * {@code out}, {@code k}, {@code rim}), {@code volume}, {@code bulge}, {@code rigid}, {@code firmness}, {@code step} ({@code rise}, {@code sway}),
+	 * {@code turn}, {@code dressed} ({@code stiff}, {@code limit}, {@code couple}), {@code collidesWith}, {@code presses} (bone names) and {@code weight}. Each
+	 * of the grouped keys may also be given flat ({@code "lumpDamping": 0.2})
+	 */
+	/** The keys of the old per-vertex flesh that mean nothing to the cage: it moves the flesh, so how stiff its edges were, how it was pulled back and how heavy it was are not asked */
+	private static final Set<String> OLD_FLESH_KEYS = Set.of("stiffness", "bend", "damping", "inertia", "gravity", "anchor", "radius", "friction", "iterations",
+			"maxParticles", "pinHeight", "mesh");
+
+	private static void readFlesh(String name, JsonObject object, String source, List<String> warnings, Map<String, FleshParams> soft, String section) {
+		String where = source + " " + section + " \"" + name + "\"";
+		List<String> bones = new ArrayList<>();
+
+		if (object.has("bones") && object.get("bones").isJsonArray())
+			object.getAsJsonArray("bones").forEach(e -> bones.add(e.getAsString()));
+		else if (object.has("bone"))
+			bones.add(object.get("bone").getAsString());
+
+		if (bones.isEmpty() || bones.size() > 2) {
+			warnings.add(where + ": needs \"bones\", one bone or a left and right pair; skipped");
+
+			return;
+		}
+
+		JsonObject merged = new JsonObject();
+		String presetName = object.has("preset") ? object.get("preset").getAsString() : "pouch";
+		JsonObject preset = SOFT_PRESETS.get(presetName);
+
+		if (preset == null)
+			warnings.add(where + ": unknown soft preset \"" + presetName + "\" (known: " + String.join(", ", SOFT_PRESETS.keySet()) + ")");
+		else
+			preset.entrySet().forEach(e -> merged.add(e.getKey(), e.getValue()));
+
+		// the grouped keys flattened, so a preset's flat key and an author's grouped one land in the same place
+		List<String> old = new ArrayList<>();
+
+		for (Map.Entry<String, JsonElement> entry : object.entrySet()) {
+			// a flesh entry written for the old per-vertex solver: its flat numbers (not the cage's groups of the same name) have no meaning here
+			if (section.equals("flesh") && OLD_FLESH_KEYS.contains(entry.getKey()) && !entry.getValue().isJsonObject()) {
+				old.add(entry.getKey());
+
+				continue;
+			}
+
+			String group = switch (entry.getKey()) {
+				case "anchor" -> "anchor";
+				case "lump" -> "lump";
+				case "node" -> "node";
+				case "squeeze" -> "squeeze";
+				case "step" -> "step";
+				case "dressed" -> "dressed";
+				default -> null;
+			};
+
+			if (group == null || !entry.getValue().isJsonObject()) {
+				merged.add(entry.getKey(), entry.getValue());
+
+				continue;
+			}
+
+			for (Map.Entry<String, JsonElement> inner : entry.getValue().getAsJsonObject().entrySet()) {
+				String key = switch (group + "." + inner.getKey()) {
+					case "anchor.from" -> "anchorFrom";
+					case "anchor.hold" -> "anchorHold";
+					case "anchor.full" -> "anchorFull";
+					case "anchor.depth" -> "depth";
+					case "lump.damping" -> "lumpDamping";
+					case "lump.inertia", "lump.inert" -> "inertia";
+					case "lump.share" -> "lumpShare";
+					case "lump.side" -> "sideStiffness";
+					case "lump.stiffen" -> "stiffen";
+					case "node.damping" -> "nodeDamping";
+					case "node.shape" -> "shape";
+					case "node.link" -> "link";
+					case "node.gravity" -> "gravity";
+					case "squeeze.in" -> "squeezeIn";
+					case "squeeze.out" -> "squeezeOut";
+					case "squeeze.k" -> "squeezeStiffness";
+					case "squeeze.rim" -> "rim";
+					case "step.rise" -> "rise";
+					case "step.sway" -> "sway";
+					case "dressed.stiff" -> "dressedStiffness";
+					case "dressed.limit" -> "dressedLimit";
+					case "dressed.couple" -> "dressedCouple";
+					default -> null;
+				};
+
+				if (key == null)
+					warnings.add(where + ": unknown key \"" + entry.getKey() + "." + inner.getKey() + "\"");
+				else
+					merged.add(key, inner.getValue());
+			}
+		}
+
+		float softness = 1f;
+		Float shapeSoftness = null;
+		float limit = 0.15625f;
+		float reach = 1f;
+		float[] tip = null;
+		float[] up = null;
+		float anchorFrom = 0.65f;
+		float anchorHold = 0.75f;
+		float anchorFull = 0.9f;
+		float depthFrom = 0.35f;
+		float depthTo = 0.75f;
+		float lumpDamping = 0.18f;
+		float inertia = 1.3f;
+		float lumpShare = 0.7f;
+		float sideStiffness = 2f;
+		float stiffen = 0.8f;
+		float firmness = 1f;
+		float nodeDamping = 0.3f;
+		float shape = 0.12f;
+		float link = 0.08f;
+		float gravity = 0.00272f;
+		float squeezeIn = 0.8f;
+		float squeezeOut = 5f;
+		float squeezeStiffness = 2.5f;
+		float rim = 0.7f;
+		float volume = 0.6f;
+		float meat = 0.5f;
+		boolean bonePivot = true;
+		float[] pivot = null;
+		float bulge = 0.6f;
+		float rigid = 1f;
+		float rise = 0.05f;
+		float sway = 0.2f;
+		float turn = 1f;
+		float dressedStiffness = 1.5f;
+		float dressedLimit = 0.8f;
+		float dressedCouple = 0.25f;
+		float weight = 1f;
+		float[] softCenter = null;
+		float softRadius = 0f;
+		List<String> carry = new ArrayList<>();
+		Set<String> collides = new LinkedHashSet<>(List.of("body", "other", "players", "mobs", "world"));
+		List<String> presses = new ArrayList<>(List.of("steve*", "arm*", "lowerArm*", "forearm*", "hand*"));
+
+		for (Map.Entry<String, JsonElement> entry : merged.entrySet()) {
+			JsonElement v = entry.getValue();
+
+			try {
+				switch (entry.getKey()) {
+					case "bones", "bone", "preset", "collideBones", "ignoreBones" -> {}
+					case "softness" -> softness = Math.max(0.1f, v.getAsFloat());
+					case "shapeSoftness" -> shapeSoftness = Math.max(0.1f, v.getAsFloat());
+					case "limit" -> limit = Math.max(0f, v.getAsFloat());
+					case "reach" -> reach = clamp01(v.getAsFloat());
+					case "tip" -> tip = axis(v);
+					case "up" -> up = axis(v);
+					case "anchorFrom" -> anchorFrom = clamp01(v.getAsFloat());
+					case "anchorHold" -> anchorHold = clamp01(v.getAsFloat());
+					case "anchorFull" -> anchorFull = clamp01(v.getAsFloat());
+					case "depth" -> {
+						depthFrom = clamp01(v.getAsJsonArray().get(0).getAsFloat());
+						depthTo = clamp01(v.getAsJsonArray().get(1).getAsFloat());
+					}
+					case "lumpDamping" -> lumpDamping = Math.max(0f, v.getAsFloat());
+					case "inertia" -> inertia = Math.max(0f, v.getAsFloat());
+					case "lumpShare" -> lumpShare = clamp01(v.getAsFloat());
+					case "sideStiffness" -> sideStiffness = Math.max(0.1f, v.getAsFloat());
+					case "stiffen" -> stiffen = Math.max(0.05f, v.getAsFloat());
+					case "firmness" -> firmness = Math.max(0.05f, v.getAsFloat());
+					case "nodeDamping" -> nodeDamping = Math.max(0f, v.getAsFloat());
+					case "shape" -> shape = clamp01(v.getAsFloat());
+					case "link" -> link = clamp01(v.getAsFloat());
+					case "gravity" -> gravity = v.getAsFloat();
+					case "squeezeIn" -> squeezeIn = Math.max(0.01f, v.getAsFloat());
+					case "squeezeOut" -> squeezeOut = Math.max(0.01f, v.getAsFloat());
+					case "squeezeStiffness" -> squeezeStiffness = Math.max(0f, v.getAsFloat());
+					case "rim" -> rim = Math.max(0f, v.getAsFloat());
+					case "volume" -> volume = Math.max(0f, v.getAsFloat());
+					case "pivot" -> {
+						if (v.isJsonArray()) {
+							pivot = axis(v);
+						}
+						else {
+							String text = v.getAsString().trim().toLowerCase(java.util.Locale.ROOT);
+
+							if (!text.equals("bone") && !text.equals("auto"))
+								throw new IllegalArgumentException("not a pivot: " + text + " (bone, auto, or [x, y, z])");
+
+							bonePivot = text.equals("bone");
+						}
+					}
+					case "meat" -> meat = Math.max(0f, Math.min(2f, v.getAsFloat()));
+					case "bulge" -> bulge = Math.max(0f, v.getAsFloat());
+					case "rigid" -> rigid = Math.max(0f, v.getAsFloat());
+					case "rise" -> rise = Math.max(0f, v.getAsFloat());
+					case "sway" -> sway = Math.max(0f, v.getAsFloat());
+					case "turn" -> turn = Math.max(0f, v.getAsFloat());
+					case "dressedStiffness" -> dressedStiffness = Math.max(0.1f, v.getAsFloat());
+					case "dressedLimit" -> dressedLimit = clamp01(v.getAsFloat());
+					case "dressedCouple" -> dressedCouple = clamp01(v.getAsFloat());
+					case "weight" -> weight = clamp01(v.getAsFloat());
+					case "softCenter" -> softCenter = new float[] {v.getAsJsonArray().get(0).getAsFloat(), v.getAsJsonArray().get(1).getAsFloat(), v.getAsJsonArray().get(2).getAsFloat()};
+					case "softRadius" -> softRadius = Math.max(0f, v.getAsFloat());
+					case "carry" -> {
+						carry.clear();
+						v.getAsJsonArray().forEach(e -> carry.add(e.getAsString()));
+					}
+					case "collidesWith" -> {
+						collides.clear();
+						v.getAsJsonArray().forEach(e -> collides.add(e.getAsString()));
+					}
+					case "presses" -> {
+						presses.clear();
+						v.getAsJsonArray().forEach(e -> presses.add(e.getAsString()));
+					}
+					default -> warnings.add(where + ": unknown key \"" + entry.getKey() + "\"");
+				}
+			}
+			catch (RuntimeException ex) {
+				warnings.add(where + ": \"" + entry.getKey() + "\" has a value that cannot be read (" + ex.getMessage() + ")");
+			}
+		}
+
+		// meat: heavier, so a swing dies away sooner and sags more
+		lumpDamping *= 1f + 0.8f * meat;
+		nodeDamping *= 1f + 0.8f * meat;
+		gravity *= 1f + 0.5f * meat;
+
+		soft.put(name, new FleshParams(List.copyOf(bones), softness, shapeSoftness != null ? shapeSoftness : softness, limit, reach, tip, up, anchorFrom, anchorHold,
+				anchorFull, depthFrom, depthTo, lumpDamping, inertia, lumpShare, sideStiffness, stiffen, firmness, nodeDamping, shape, link, gravity, squeezeIn,
+				squeezeOut, squeezeStiffness, rim, volume, bulge, rigid, rise, sway, turn, dressedStiffness, dressedLimit, dressedCouple, Set.copyOf(collides),
+				List.copyOf(presses), weight, softCenter, softRadius, List.copyOf(carry), meat, bonePivot, pivot));
+
+		if (!old.isEmpty())
+			warnings.add(where + ": " + String.join(", ", old) + " were for the old per-vertex flesh and do nothing now; the cage moves it (see softness, limit, firmness, lump, node)");
+	}
+
+	/** {@code "auto"} (null), {@code "+z"}, {@code "-y"} and the like, or {@code [x, y, z]} */
+	private static float[] axis(JsonElement value) {
+		if (value.isJsonArray())
+			return new float[] {value.getAsJsonArray().get(0).getAsFloat(), value.getAsJsonArray().get(1).getAsFloat(), value.getAsJsonArray().get(2).getAsFloat()};
+
+		String text = value.getAsString().trim().toLowerCase(java.util.Locale.ROOT);
+
+		if (text.equals("auto"))
+			return null;
+
+		if (text.length() != 2 || (text.charAt(0) != '+' && text.charAt(0) != '-') || "xyz".indexOf(text.charAt(1)) < 0)
+			throw new IllegalArgumentException("not an axis: " + text + " (auto, +x, -x, +y, -y, +z, -z)");
+
+		float sign = text.charAt(0) == '-' ? -1f : 1f;
+		int a = "xyz".indexOf(text.charAt(1));
+
+		return new float[] {a == 0 ? sign : 0f, a == 1 ? sign : 0f, a == 2 ? sign : 0f};
 	}
 
 	/**

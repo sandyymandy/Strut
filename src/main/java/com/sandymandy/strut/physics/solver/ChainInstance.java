@@ -196,8 +196,10 @@ public final class ChainInstance {
 			Collider.cull(world, this.state.x, this.n + 1, 0.8 + 2.0 * Math.sqrt(dx * dx + dy * dy + dz * dz) + this.active.radius(), this.shapes);
 
 		if (others != null) {
+			boolean feelsOther = this.active.collidesWith().contains(Bodies.OTHER);
+
 			for (Collider.Placed shape : others) {
-				if (Bodies.feels(this.active.collidesWith(), shape))
+				if (Bodies.feels(this.active.collidesWith(), feelsOther, shape))
 					this.shapes.add(shape);
 			}
 		}

@@ -28,7 +28,7 @@ import java.util.Set;
  * is, every frame: the wearer's own animation, physics, overrides and visibility, so the attachment follows every pose and a wearer's jiggle without being
  * animated itself. A bone with no match keeps its own rest pose, and moves with whichever of its parents is matched. The attached model is therefore made on
  * top of the wearer's skeleton (the same bone names, the same pivots, the same hierarchy), with only the part that is worn kept; one attachment then fits
- * every wearer that has those bones, the bare and the dressed model of a character alike
+ * every wearer that has those bones, the alternate and the standard model of a character alike
  * <p>
  * Hiding: a bone that carries geometry does not take the wearer's own hidden flag (a wearer hides its own armour bones to show the worn model in their place), but
  * is hidden by whatever above it is, so a helmet goes with the head in first person. A wearer whose names differ gets a {@link #boneMap} and one whose proportions differ a {@link #fit}. Names it matches are copied as they are, hidden flags included: name the attached bones after the wearer's skeleton (a {@code head}, an {@code upperBody}),

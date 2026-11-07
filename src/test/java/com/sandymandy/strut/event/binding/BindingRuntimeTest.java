@@ -78,18 +78,18 @@ class BindingRuntimeTest {
 	@Test
 	@DisplayName("every fixed sound of a binding plays")
 	void fixedSoundsAllPlay() {
-		load(set(AVA, "pound", binding(List.of(snd("impact"), snd("bedrustle")), List.of())));
+		load(set(AVA, "strike", binding(List.of(snd("impact"), snd("rustle")), List.of())));
 
-		assertTrue(run("pound", 1, 1, List.of(AVA)));
-		assertEquals(List.of("impact@1.0/1.0", "bedrustle@1.0/1.0"), this.played);
+		assertTrue(run("strike", 1, 1, List.of(AVA)));
+		assertEquals(List.of("impact@1.0/1.0", "rustle@1.0/1.0"), this.played);
 	}
 
 	@Test
 	@DisplayName("the payload's volume and pitch multiply every sound the binding plays")
 	void volumeAndPitchMultiply() {
-		load(set(AVA, "pound", binding(List.of(snd("a")), List.of(new WeightedSound(snd("b"), 1)))));
+		load(set(AVA, "strike", binding(List.of(snd("a")), List.of(new WeightedSound(snd("b"), 1)))));
 
-		run("pound", 0.5f, 2f, List.of(AVA));
+		run("strike", 0.5f, 2f, List.of(AVA));
 
 		assertEquals(List.of("a@0.5/2.0", "b@0.5/2.0"), this.played);
 	}
@@ -139,49 +139,49 @@ class BindingRuntimeTest {
 	@Test
 	@DisplayName("the first set in the chain that defines a key supplies the whole binding - nothing is merged")
 	void firstSetWinsWholesale() {
-		load(set(AVA, "pound", binding(List.of(snd("ava_pound")), List.of())),
-				set(DEFAULT, "pound", binding(List.of(snd("default_pound"), snd("default_extra")), List.of())));
+		load(set(AVA, "strike", binding(List.of(snd("ava_strike")), List.of())),
+				set(DEFAULT, "strike", binding(List.of(snd("default_strike"), snd("default_extra")), List.of())));
 
-		run("pound", 1, 1, List.of(AVA, DEFAULT));
+		run("strike", 1, 1, List.of(AVA, DEFAULT));
 
-		assertEquals(List.of("ava_pound@1.0/1.0"), this.played, "the default's sounds do not also play");
+		assertEquals(List.of("ava_strike@1.0/1.0"), this.played, "the default's sounds do not also play");
 	}
 
 	@Test
 	@DisplayName("a key the first set lacks falls through to the next - a character overrides only what is hers")
 	void fallsThroughTheChain() {
 		load(set(AVA, "cry", binding(List.of(snd("ava_moan")), List.of())),
-				set(DEFAULT, "pound", binding(List.of(snd("default_pound")), List.of())));
+				set(DEFAULT, "strike", binding(List.of(snd("default_strike")), List.of())));
 
-		run("pound", 1, 1, List.of(AVA, DEFAULT));
+		run("strike", 1, 1, List.of(AVA, DEFAULT));
 
-		assertEquals(List.of("default_pound@1.0/1.0"), this.played);
+		assertEquals(List.of("default_strike@1.0/1.0"), this.played);
 	}
 
 	@Test
 	@DisplayName("a character can silence a cue by defining it empty, instead of inheriting the default")
 	void emptyBindingSilencesACue() {
-		load(set(AVA, "pound", binding(List.of(), List.of())),
-				set(DEFAULT, "pound", binding(List.of(snd("default_pound")), List.of())));
+		load(set(AVA, "strike", binding(List.of(), List.of())),
+				set(DEFAULT, "strike", binding(List.of(snd("default_strike")), List.of())));
 
-		assertTrue(run("pound", 1, 1, List.of(AVA, DEFAULT)));
+		assertTrue(run("strike", 1, 1, List.of(AVA, DEFAULT)));
 		assertTrue(this.played.isEmpty());
 	}
 
 	@Test
 	@DisplayName("a chain naming a set that is not loaded skips it and carries on to the next")
 	void missingSetIsSkipped() {
-		load(set(DEFAULT, "pound", binding(List.of(snd("default_pound")), List.of())));
+		load(set(DEFAULT, "strike", binding(List.of(snd("default_strike")), List.of())));
 
-		run("pound", 1, 1, List.of(AVA, DEFAULT));
+		run("strike", 1, 1, List.of(AVA, DEFAULT));
 
-		assertEquals(List.of("default_pound@1.0/1.0"), this.played);
+		assertEquals(List.of("default_strike@1.0/1.0"), this.played);
 	}
 
 	@Test
 	@DisplayName("an unbound key plays nothing, reports false, and is counted so a mistyped key can be found")
 	void unboundKeyIsCounted() {
-		load(set(AVA, "pound", binding(List.of(snd("x")), List.of())));
+		load(set(AVA, "strike", binding(List.of(snd("x")), List.of())));
 		long before = EventStats.unboundKeys();
 
 		assertFalse(run("nonesuch", 1, 1, List.of(AVA)));
@@ -192,9 +192,9 @@ class BindingRuntimeTest {
 	@Test
 	@DisplayName("key lookup is case-insensitive")
 	void lookupIsCaseInsensitive() {
-		load(set(AVA, "doggyfastmsg1", binding(List.of(snd("x")), List.of())));
+		load(set(AVA, "stepfastmsg1", binding(List.of(snd("x")), List.of())));
 
-		assertTrue(run("doggyFastMSG1", 1, 1, List.of(AVA)));
+		assertTrue(run("stepFastMSG1", 1, 1, List.of(AVA)));
 	}
 
 	@Test
@@ -246,7 +246,7 @@ class BindingRuntimeTest {
 	@Test
 	@DisplayName("loading replaces every set, so one a pack removed stops being found")
 	void reloadReplaces() {
-		load(set(AVA, "pound", binding(List.of(snd("x")), List.of())));
+		load(set(AVA, "strike", binding(List.of(snd("x")), List.of())));
 		load(set(DEFAULT, "other", binding(List.of(snd("y")), List.of())));
 
 		assertTrue(this.sets.get(AVA).isEmpty());

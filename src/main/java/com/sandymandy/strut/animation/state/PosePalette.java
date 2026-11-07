@@ -2,6 +2,7 @@ package com.sandymandy.strut.animation.state;
 
 import com.sandymandy.strut.cache.object.BakedStrutModel;
 import com.sandymandy.strut.cache.object.GroupBoneDefinition;
+import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
 
 /**
@@ -40,6 +41,14 @@ public final class PosePalette {
 	 * reuse one array across frames without reallocating
 	 */
 	public static void compute(BakedStrutModel model, Pose pose, Matrix4f[] dest) {
+		compute(model, pose, dest, null);
+	}
+
+	/**
+	 * {@link #compute(BakedStrutModel, Pose, Matrix4f[])} with every top-level bone starting from {@code root} rather than from nothing: the bones come out
+	 * already carried by {@code root} (the entity's own transform, for a draw), with no second multiplication for each. Null is the identity
+	 */
+	public static void compute(BakedStrutModel model, Pose pose, Matrix4f[] dest, @Nullable Matrix4f root) {
 		GroupBoneDefinition[] definitions = model.flatBones();
 
 		for (int i = 0; i < definitions.length; i++) {
@@ -47,10 +56,12 @@ public final class PosePalette {
 			GroupBoneDefinition parent = definition.getParent();
 			Matrix4f matrix = dest[i];
 
-			if (parent == null)
-				matrix.identity();
-			else
+			if (parent != null)
 				matrix.set(dest[parent.getIndex()]);
+			else if (root != null)
+				matrix.set(root);
+			else
+				matrix.identity();
 
 			composeLocal(matrix, pose, i, definition);
 		}
@@ -89,6 +100,43 @@ public final class PosePalette {
 	}
 
 	/**
+	 * {@link #computeBoneAtPivot} for many bones of one pose: each bone's transform from the model is kept in {@code memo} once worked out (and marked in
+	 * {@code done}, which the caller clears for each pose), so the chain of ancestors the bones share is composed once and not for every bone
+	 */
+	public static void computeBoneAtPivot(Pose pose, GroupBoneDefinition definition, Matrix4f dest, Matrix4f[] memo, boolean[] done) {
+		int index = definition.getIndex();
+
+		computeBoneMemo(pose, definition, dest, memo, done);
+		dest.translate((definition.getPivotX() + pose.getPivotDeltaX(index)) / 16f, (definition.getPivotY() + pose.getPivotDeltaY(index)) / 16f,
+				(definition.getPivotZ() + pose.getPivotDeltaZ(index)) / 16f);
+	}
+
+	private static void computeBoneMemo(Pose pose, GroupBoneDefinition definition, Matrix4f dest, Matrix4f[] memo, boolean[] done) {
+		int index = definition.getIndex();
+
+		if (done[index]) {
+			dest.set(memo[index]);
+
+			return;
+		}
+
+		GroupBoneDefinition parent = definition.getParent();
+
+		if (parent == null)
+			dest.identity();
+		else
+			computeBoneMemo(pose, parent, dest, memo, done);
+
+		composeLocal(dest, pose, index, definition);
+
+		if (memo[index] == null)
+			memo[index] = new Matrix4f();
+
+		memo[index].set(dest);
+		done[index] = true;
+	}
+
+	/**
 	 * A bone's transform with its origin <b>at the bone's own pivot</b>, which is what GeckoLib's tracked bone matrices were: it captured them after
 	 * the translate, rotate and scale but before translating back away from the pivot. {@link #computeBone} ends with that translate-away, because it
 	 * is the matrix that carries the bone's model-space geometry to where it is drawn; applying it to the point (0, 0, 0) gives the model's origin
@@ -117,16 +165,26 @@ public final class PosePalette {
 	 * {@link com.sandymandy.strut.util.RenderUtil#applyPivotRotation} already apply
 	 */
 	private static void composeLocal(Matrix4f matrix, Pose pose, int index, GroupBoneDefinition definition) {
+		float rotX = pose.getRotX(index);
+		float rotY = pose.getRotY(index);
+		float rotZ = pose.getRotZ(index);
+		float scaleX = pose.getScaleX(index);
+		float scaleY = pose.getScaleY(index);
+		float scaleZ = pose.getScaleZ(index);
+
+		// Most bones of a detailed model neither turn nor scale this frame: moving to the pivot and back then cancels, and only the bone's own offset is left
+		if (rotX == 0 && rotY == 0 && rotZ == 0 && scaleX == 1 && scaleY == 1 && scaleZ == 1) {
+			matrix.translate(-pose.getPosX(index) / 16f, pose.getPosY(index) / 16f, pose.getPosZ(index) / 16f);
+
+			return;
+		}
+
 		float pivotX = definition.getPivotX() + pose.getPivotDeltaX(index);
 		float pivotY = definition.getPivotY() + pose.getPivotDeltaY(index);
 		float pivotZ = definition.getPivotZ() + pose.getPivotDeltaZ(index);
 
 		matrix.translate(-pose.getPosX(index) / 16f, pose.getPosY(index) / 16f, pose.getPosZ(index) / 16f);
 		matrix.translate(pivotX / 16f, pivotY / 16f, pivotZ / 16f);
-
-		float rotX = pose.getRotX(index);
-		float rotY = pose.getRotY(index);
-		float rotZ = pose.getRotZ(index);
 
 		if (rotX == 0 && rotY == 0) {
 			if (rotZ != 0)
@@ -142,7 +200,10 @@ public final class PosePalette {
 			matrix.rotateZYX(rotZ, rotY, rotX);
 		}
 
-		matrix.scale(pose.getScaleX(index), pose.getScaleY(index), pose.getScaleZ(index));
+		if (scaleX != 1 || scaleY != 1 || scaleZ != 1)
+			matrix.scale(scaleX, scaleY, scaleZ);
+
 		matrix.translate(-pivotX / 16f, -pivotY / 16f, -pivotZ / 16f);
 	}
+
 }

@@ -51,6 +51,12 @@ public final class Pose {
 	private final float[] pivotDeltaZ;
 
 	private final long[] hidden;
+
+	/**
+	 * A bit for each bone, set whenever the bone's position, rotation or scale is written, and cleared by the animation's reset pass once it has dealt with the
+	 * bone. A bone at rest that nothing has written since is passed over by that pass, which would only write the values it already holds. Every bit starts set
+	 */
+	private final long[] written;
 	private final long[] childrenHidden;
 
 	public Pose(int boneCount) {
@@ -71,6 +77,8 @@ public final class Pose {
 		this.pivotDeltaZ = new float[boneCount];
 
 		this.hidden = new long[bitSetLength(boneCount)];
+		this.written = new long[bitSetLength(boneCount)];
+		Arrays.fill(this.written, -1L);
 		this.childrenHidden = new long[bitSetLength(boneCount)];
 
 		Arrays.fill(this.scaleX, 1f);
@@ -86,18 +94,34 @@ public final class Pose {
 		this.posX[index] = x;
 		this.posY[index] = y;
 		this.posZ[index] = z;
+		markWritten(index);
 	}
 
 	public void setRotation(int index, float x, float y, float z) {
 		this.rotX[index] = x;
 		this.rotY[index] = y;
 		this.rotZ[index] = z;
+		markWritten(index);
 	}
 
 	public void setScale(int index, float x, float y, float z) {
 		this.scaleX[index] = x;
 		this.scaleY[index] = y;
 		this.scaleZ[index] = z;
+		markWritten(index);
+	}
+
+	/** Whether bone {@code index} was written since {@link #clearWritten} last said it was dealt with */
+	public boolean written(int index) {
+		return (this.written[index >> 6] & (1L << index)) != 0;
+	}
+
+	public void clearWritten(int index) {
+		this.written[index >> 6] &= ~(1L << index);
+	}
+
+	private void markWritten(int index) {
+		this.written[index >> 6] |= 1L << index;
 	}
 
 	public float getPosX(int index) {
@@ -280,7 +304,7 @@ public final class Pose {
 
 			blended.rotationZYX(prevRotZ, prevRotY, prevRotX);
 			target.rotationZYX(currRotZ, currRotY, currRotX);
-			blended.slerp(target, partialTick);
+			slerp(blended, target, partialTick);
 			eulerAnglesZYX(blended, euler);
 
 			dest.rotX[i] = euler.x;
@@ -337,14 +361,67 @@ public final class Pose {
 		if (Math.abs(sineY) >= GIMBAL_LOCK_SINE) {
 			dest.x = 0;
 			dest.y = (float)Math.copySign(Math.PI / 2, sineY);
-			dest.z = (float)(2 * Math.atan2(z, w));
+			dest.z = (float)(2 * atan2(z, w));
 
 			return;
 		}
 
-		dest.x = (float)Math.atan2(y * z + w * x, 0.5f - x * x - y * y);
-		dest.y = (float)Math.asin(sineY);
-		dest.z = (float)Math.atan2(x * y + w * z, 0.5f - y * y - z * z);
+		dest.x = atan2(y * z + w * x, 0.5f - x * x - y * y);
+		dest.y = atan2(sineY, (float)Math.sqrt(Math.max(0f, 1f - sineY * sineY)));
+		dest.z = atan2(x * y + w * z, 0.5f - y * y - z * z);
+	}
+
+	/**
+	 * {@code atan2} to about 1e-5 radians (a thousandth of a degree): the library's is exact to the last bit and takes a good deal longer, and
+	 * a model with a hundred moving bones asks for two or three of them for each, for every entity, every frame
+	 */
+	/** {@code a} turned toward {@code b} by {@code t} along the short way, as {@link Quaternionf#slerp} does, with the quick {@link #atan2} for the angle */
+	static void slerp(Quaternionf a, Quaternionf b, float t) {
+		float dot = a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
+		float sign = dot < 0f ? -1f : 1f;
+		float cos = Math.abs(dot);
+		float s0;
+		float s1;
+
+		if (cos >= 0.9995f) {
+			s0 = 1f - t;
+			s1 = t * sign;
+		}
+		else {
+			float sin = (float)Math.sqrt(1f - cos * cos);
+			float angle = atan2(sin, cos);
+			float inverse = 1f / sin;
+
+			s0 = (float)Math.sin((1f - t) * angle) * inverse;
+			s1 = (float)Math.sin(t * angle) * inverse * sign;
+		}
+
+		a.set(s0 * a.x + s1 * b.x, s0 * a.y + s1 * b.y, s0 * a.z + s1 * b.z, s0 * a.w + s1 * b.w);
+		a.normalize();
+	}
+
+	static float atan2(float y, float x) {
+		float ax = Math.abs(x);
+		float ay = Math.abs(y);
+		float high = Math.max(ax, ay);
+
+		if (high == 0f)
+			return 0f;
+
+		float a = Math.min(ax, ay) / high;
+		float s = a * a;
+		// the minimax polynomial for atan on [0, 1]
+		float r = ((((-0.0117212f * s + 0.05265332f) * s - 0.11643287f) * s + 0.19354346f) * s - 0.33262347f) * s + 0.99997726f;
+
+		r *= a;
+
+		if (ay > ax)
+			r = (float)(Math.PI / 2) - r;
+
+		if (x < 0f)
+			r = (float)Math.PI - r;
+
+		return y < 0f ? -r : r;
 	}
 
 	private static float lerp(float t, float a, float b) {

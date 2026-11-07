@@ -80,7 +80,7 @@ creature.overrides().clearOverlay("head", 0);</code></pre>
 <p>A mod can change the shader itself, add coloured lights and run code around the draw: see <a href="render-hooks.html">Changing the render pipeline</a>.</p>
 
 <h2 id="lod">Animation level of detail</h2>
-<p>Animations are evaluated less often the farther an entity is from the camera. It affects only how often a pose is recomputed, never server-side events. To keep an animatable frame-exact at any distance, override <code>useAnimationLod()</code> to return <code>false</code>.</p>
+<p>Animations are evaluated less often the farther an entity is from the camera. In a crowd (more than about two dozen entities drawn) the distances shrink, so the nearest entities stay smooth every frame and the rest take turns. It affects only how often a pose is recomputed, never server-side events. To keep an animatable frame-exact at any distance, override <code>useAnimationLod()</code> to return <code>false</code>.</p>
 
 <h2 id="f9">The F9 overlay</h2>
 <p>Press <kbd>F9</kbd> to toggle. Every line is a total for the last completed frame unless it says <em>cumulative</em>.</p>

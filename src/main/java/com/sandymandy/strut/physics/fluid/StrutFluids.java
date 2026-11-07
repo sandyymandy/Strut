@@ -8,7 +8,7 @@ import java.util.Random;
 import com.sandymandy.strut.physics.StrutPhysics;
 
 /**
- * The thick liquid: a few hundred soft particles that cling to each other and to what they touch, drawn as one smooth blobby surface (metaballs). Client only,
+ * The fluid: a few hundred soft particles that cling to each other and to what they touch, drawn as one smooth blobby surface (metaballs). Client only,
  * visual only, like the rest of the physics module
  * <pre>{@code
  * // a burst from a bone of a model, in the bone's own directions: a mod's event binding can do this on a marker (see "strut_physics:fluid")

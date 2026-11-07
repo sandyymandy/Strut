@@ -179,6 +179,9 @@ public final class GpuBatchQueue {
 	private static ByteBuffer visualsScratch = BufferUtils.createByteBuffer(0);
 	private static FloatBuffer skinScratch = BufferUtils.createFloatBuffer(0);
 	private static Matrix4f[] boneScratch = new Matrix4f[0];
+	/** All zeros: a bone that is not drawn collapses to a point */
+	private static final Matrix4f ZERO_MATRIX = new Matrix4f().zero();
+
 	private static final Matrix4f worldBoneScratch = new Matrix4f();
 
 	private GpuBatchQueue() {}
@@ -608,21 +611,24 @@ public final class GpuBatchQueue {
 		for (int instance = 0; instance < instanceCount; instance++) {
 			Submission submission = submissions.get(instance);
 
-			PosePalette.compute(submission.model(), submission.pose(), palette);
+			PosePalette.compute(submission.model(), submission.pose(), palette, submission.entityTransform());
 
 			int instanceBase = instance * boneCount * 16;
+			Pose pose = submission.pose();
+			// worked out once for the instance, not for each bone: most instances have no translucent bone and no texture override
+			BoneRenderLayers layers = blendedPasses && !key.render().translucent() ? submission.layers() : null;
+			BoneTextureOverrides replacing = !irisActive && key.render().overrideReplacesBase() && submission.textures() != null && !submission.textures().isEmpty()
+					? submission.textures() : null;
 
 			for (int bone = 0; bone < boneCount; bone++) {
 				// A translucent bone collapses here exactly like a hidden one: pass C draws it, blended, from its own palette. So does a bone
 				// with a TEXTURE override on the raw path: the redraw below replaces it, rather than drawing over the model's own texture (under a
 				// shader pack the redraw reads this same pose output, so the bone must stay in it there)
-				if (submission.pose().isHidden(bone) || (blendedPasses && LayerDrawPlan.drawnBlended(submission.layers(), key.render().translucent(), bone))
-						|| (!irisActive && key.render().overrideReplacesBase() && replacedByOverride(submission.textures(), b -> gpuModel.boneIndexCount(b) > 0, bone)))
-					worldBoneScratch.zero();
+				if (pose.isHidden(bone) || (layers != null && layers.isTranslucent(bone))
+						|| (replacing != null && replacing.get(bone) != null && gpuModel.boneIndexCount(bone) > 0))
+					ZERO_MATRIX.get(instanceBase + bone * 16, paletteBuffer);
 				else
-					worldBoneScratch.set(submission.entityTransform()).mul(palette[bone]);
-
-				worldBoneScratch.get(instanceBase + bone * 16, paletteBuffer);
+					palette[bone].get(instanceBase + bone * 16, paletteBuffer);
 			}
 
 			Color colour = new Color(submission.colour());
@@ -898,14 +904,14 @@ public final class GpuBatchQueue {
 				Submission submission = submissions.get(which.getInt(j));
 				BoneTextureOverrides textures = submission.textures();
 
-				PosePalette.compute(submission.model(), submission.pose(), palette);
+				PosePalette.compute(submission.model(), submission.pose(), palette, submission.entityTransform());
 
 				for (int bone = 0; bone < boneCount; bone++) {
 					boolean mine = !submission.pose().isHidden(bone) && gpuModel.boneIndexCount(bone) > 0 && texture.equals(textures.get(bone))
 							&& !(blendedPasses && LayerDrawPlan.drawnBlended(submission.layers(), translucentModel, bone));
 
 					if (mine)
-						worldBoneScratch.set(submission.entityTransform()).mul(palette[bone]);
+						worldBoneScratch.set(palette[bone]);
 					else
 						worldBoneScratch.zero();
 
@@ -994,7 +1000,7 @@ public final class GpuBatchQueue {
 				began = true;
 			}
 
-			PosePalette.compute(submission.model(), submission.pose(), palette);
+			PosePalette.compute(submission.model(), submission.pose(), palette, submission.entityTransform());
 
 			FloatBuffer singlePalette = paletteBuffer(boneCount * 16);
 
@@ -1002,7 +1008,7 @@ public final class GpuBatchQueue {
 				if (submission.pose().isHidden(bone))
 					worldBoneScratch.zero();
 				else
-					worldBoneScratch.set(submission.entityTransform()).mul(palette[bone]);
+					worldBoneScratch.set(palette[bone]);
 
 				worldBoneScratch.get(bone * 16, singlePalette);
 			}
@@ -1077,7 +1083,7 @@ public final class GpuBatchQueue {
 				began = true;
 			}
 
-			PosePalette.compute(submission.model(), submission.pose(), palette);
+			PosePalette.compute(submission.model(), submission.pose(), palette, submission.entityTransform());
 
 			FloatBuffer singlePalette = paletteBuffer(boneCount * 16);
 
@@ -1085,7 +1091,7 @@ public final class GpuBatchQueue {
 				if (submission.pose().isHidden(bone))
 					worldBoneScratch.zero();
 				else
-					worldBoneScratch.set(submission.entityTransform()).mul(palette[bone]);
+					worldBoneScratch.set(palette[bone]);
 
 				worldBoneScratch.get(bone * 16, singlePalette);
 			}

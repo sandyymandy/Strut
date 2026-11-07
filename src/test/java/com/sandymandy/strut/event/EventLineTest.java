@@ -17,10 +17,10 @@ class EventLineTest {
 	@Test
 	@DisplayName("a namespaced type id followed by text is a type and its payload")
 	void namespacedLine() {
-		EventLine.Line line = EventLine.parse("mymod:inflate 2.5").get(0);
+		EventLine.Line line = EventLine.parse("mymod:swell 2.5").get(0);
 
 		assertNull(line.error());
-		assertEquals(Identifier.of("mymod", "inflate"), line.type());
+		assertEquals(Identifier.of("mymod", "swell"), line.type());
 		assertEquals("2.5", line.payload());
 	}
 
@@ -42,11 +42,11 @@ class EventLineTest {
 	@Test
 	@DisplayName("a bare word is a strut:marker named by the word, lower-cased")
 	void bareWordIsAMarker() {
-		EventLine.Line line = EventLine.parse("becomeBare").get(0);
+		EventLine.Line line = EventLine.parse("changeLook").get(0);
 
 		assertNull(line.error());
 		assertEquals(Identifier.of(StrutConstants.MODID, "marker"), line.type());
-		assertEquals("becomebare", line.payload());
+		assertEquals("changelook", line.payload());
 	}
 
 	@Test
@@ -87,8 +87,8 @@ class EventLineTest {
 	@Test
 	@DisplayName("legacy comma lists are not split - a bare 'a, b' is an error, not two markers")
 	void commaListsAreNotGuessedAt() {
-		EventLine.Line line = EventLine.parse("lipsound, strike").get(0);
+		EventLine.Line line = EventLine.parse("voicesound, strike").get(0);
 
-		assertNotNull(line.error(), "splitting 'lipsound, strike' is exactly the string parsing typed events remove");
+		assertNotNull(line.error(), "splitting 'voicesound, strike' is exactly the string parsing typed events remove");
 	}
 }

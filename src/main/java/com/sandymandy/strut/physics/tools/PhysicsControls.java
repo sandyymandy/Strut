@@ -21,6 +21,8 @@ public final class PhysicsControls {
 	private float firmness = 1f;
 	private float weight = 1f;
 	private float inertia = 1f;
+	private float softness = 1f;
+	private boolean dressed;
 	private final Vector3f wind = new Vector3f();
 	private final Map<String, BoneControl> bones = new HashMap<>();
 	private final List<Impulse> impulses = new CopyOnWriteArrayList<>();
@@ -141,6 +143,23 @@ public final class PhysicsControls {
 		return this;
 	}
 
+	/**
+	 * How soft this entity's soft bodies are (see the {@code soft} section of a model's physics): 1 is as the model's file says, up to 3 for very soft, down to
+	 * 0.5 for firm. A per character softness setting maps here
+	 */
+	public PhysicsControls softness(float softness) {
+		this.softness = Math.max(0.25f, Math.min(4f, softness));
+
+		return this;
+	}
+
+	/** Whether this entity is dressed over its soft bodies: they are then firmer, the two of a pair move together, and they travel less */
+	public PhysicsControls dressed(boolean dressed) {
+		this.dressed = dressed;
+
+		return this;
+	}
+
 	/** How much of the physics reaches the pose for the whole model, 0 to 1 */
 	public PhysicsControls weight(float weight) {
 		this.weight = Math.max(0f, Math.min(1f, weight));
@@ -209,6 +228,14 @@ public final class PhysicsControls {
 
 	public float weight() {
 		return this.weight;
+	}
+
+	public float softness() {
+		return this.softness;
+	}
+
+	public boolean dressed() {
+		return this.dressed;
 	}
 
 	public float inertia() {

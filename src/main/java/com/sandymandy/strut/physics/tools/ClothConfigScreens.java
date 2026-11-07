@@ -32,12 +32,16 @@ public final class ClothConfigScreens {
 				.setTooltip(Text.literal("Hair, tails and cloth float, slow down and are carried by the current in water and lava")).setSaveConsumer(PhysicsOptions::water).build());
 		general.addEntry(entries.startBooleanToggle(Text.literal("Cloth"), PhysicsOptions.cloth()).setDefaultValue(true)
 				.setTooltip(Text.literal("Skirts, capes and other cloth made from a model's mesh; the costliest part of the module")).setSaveConsumer(PhysicsOptions::cloth).build());
+		general.addEntry(entries.startBooleanToggle(Text.literal("Flesh"), PhysicsOptions.flesh()).setDefaultValue(true)
+				.setTooltip(Text.literal("Flesh in a model's physics: it swings, lags, is dented by what presses into it and bulges")).setSaveConsumer(PhysicsOptions::flesh).build());
 		general.addEntry(entries.startBooleanToggle(Text.literal("Collide with other models and mobs"), PhysicsOptions.otherCollision()).setDefaultValue(true)
 				.setSaveConsumer(PhysicsOptions::otherCollision).build());
 		general.addEntry(entries.startBooleanToggle(Text.literal("Collide with players"), PhysicsOptions.playerCollision()).setDefaultValue(true)
 				.setSaveConsumer(PhysicsOptions::playerCollision).build());
 		general.addEntry(entries.startIntSlider(Text.literal("Range (blocks)"), (int)PhysicsOptions.distanceLimit(), 8, 128).setDefaultValue(48)
 				.setTooltip(Text.literal("Models farther than this from the camera are drawn as animated")).setSaveConsumer(v -> PhysicsOptions.distanceLimit(v)).build());
+		general.addEntry(entries.startIntSlider(Text.literal("Flesh range (blocks)"), (int)PhysicsOptions.fleshRange(), 8, 128).setDefaultValue(24)
+				.setTooltip(Text.literal("Flesh farther than this from the camera rests and is drawn as modelled")).setSaveConsumer(v -> PhysicsOptions.fleshRange(v)).build());
 
 		return builder.build();
 	}

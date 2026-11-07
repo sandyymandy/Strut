@@ -95,7 +95,7 @@ public final class StrutPhysicsClient implements ClientModInitializer {
 			}
 		});
 
-		// An animation clip can spray the thick liquid from a bone: { "bone": "tip", "count": 14, "speed": 2.2, "spread": 0.25 }, or a list of those.
+		// An animation clip can spray the fluid from a bone: { "bone": "tip", "count": 14, "speed": 2.2, "spread": 0.25 }, or a list of those.
 		// Optional: "preset" (default strut_physics:thick), "duration" (seconds to spread the particles over, 0 for a burst), "jitter", "inherit",
 		// "offset": [x, y, z] (blocks, from the pivot of the bone) and "direction": [x, y, z] (in the space of the bone; the default is its Blockbench front, 0 0 -1)
 		EventBindings.registerAction(Identifier.of(StrutPhysics.MOD_ID, "fluid"), (context, config) -> {

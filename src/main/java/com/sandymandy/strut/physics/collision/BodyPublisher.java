@@ -11,7 +11,7 @@ import com.sandymandy.strut.physics.config.PhysicsOptions;
 import com.sandymandy.strut.physics.solver.MotionSampler;
 
 /**
- * Makes every Strut model solid to the things that collide with bodies (the thick liquid, other models' chains and cloth), with nothing authored: from its
+ * Makes every Strut model solid to the things that collide with bodies (the fluid, other models' chains and cloth), with nothing authored: from its
  * own geometry, as a signed distance field per bone ({@link ModelSdfs}), placed on the bones of the pose it was drawn in
  * <p>
  * It costs nothing while nothing is listening: a model publishes its shapes only in a frame that follows one in which something asked for them
@@ -29,6 +29,9 @@ public final class BodyPublisher implements PoseProcessor {
 		ColliderRig rig;
 		final List<Collider.Placed> out = new ArrayList<>();
 	}
+
+	/** How much farther than the flesh's range a body is still published, blocks: what a body that far could be pressed by reaches that far in */
+	private static final double PUBLISH_MARGIN = 4;
 
 	@Override
 	public boolean appliesTo(BakedStrutModel model) {
@@ -60,6 +63,11 @@ public final class BodyPublisher implements PoseProcessor {
 		PhysicsInstance.Sample sample = MotionSampler.sample(id);
 
 		if (sample == null)
+			return;
+
+		// a body is published for what could press against it: nothing farther from the camera than the flesh's range (and the little more a neighbour could
+		// reach) is simulating anything but the swing of the whole, so there is nothing to give it to. The viewer's own is always published
+		if (!MotionSampler.isViewer(id) && MotionSampler.distanceFromCamera(sample.x(), sample.y(), sample.z()) > PhysicsOptions.effectiveFleshRange() + PUBLISH_MARGIN)
 			return;
 
 		holder.rig.prepare(context.animated());

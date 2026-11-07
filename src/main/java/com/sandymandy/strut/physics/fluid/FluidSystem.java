@@ -40,7 +40,7 @@ import com.sandymandy.strut.physics.solver.MotionSampler;
 import com.sandymandy.strut.physics.world.WorldBlocks;
 
 /**
- * The game side of the thick liquid: one pool of particles per kind of liquid stepped on the game clock, the blocks they land on, the emitters that feed them
+ * The game side of the fluid: one pool of particles per kind of liquid stepped on the game clock, the blocks they land on, the emitters that feed them
  * (a bone of a model, or a point in the world), and the drawing of each pool's surface after the entities
  * <p>
  * Everything runs on the render thread. The solver and the mesh are pure ({@link FluidSolver}, {@link FluidMesh}) and tested without a game

@@ -39,7 +39,15 @@ public final class ArmaturePose {
 	private final float[] scaleY;
 	private final float[] scaleZ;
 
+	/**
+	 * A bit for each bone, set whenever the bone's position, rotation or scale is written, and cleared by the animation's reset pass once it has dealt with the
+	 * bone. A bone at rest that nothing has written since is passed over by that pass, which would only write the values it already holds. Every bit starts set
+	 */
+	private final long[] written;
+
 	public ArmaturePose(int boneCount) {
+		this.written = new long[(boneCount + 63) >> 6];
+		Arrays.fill(this.written, -1L);
 		this.posX = new float[boneCount];
 		this.posY = new float[boneCount];
 		this.posZ = new float[boneCount];
@@ -65,18 +73,34 @@ public final class ArmaturePose {
 		this.posX[index] = x;
 		this.posY[index] = y;
 		this.posZ[index] = z;
+		markWritten(index);
 	}
 
 	public void setRotation(int index, float x, float y, float z) {
 		this.rotX[index] = x;
 		this.rotY[index] = y;
 		this.rotZ[index] = z;
+		markWritten(index);
 	}
 
 	public void setScale(int index, float x, float y, float z) {
 		this.scaleX[index] = x;
 		this.scaleY[index] = y;
 		this.scaleZ[index] = z;
+		markWritten(index);
+	}
+
+	/** Whether bone {@code index} was written since {@link #clearWritten} last said it was dealt with */
+	public boolean written(int index) {
+		return (this.written[index >> 6] & (1L << index)) != 0;
+	}
+
+	public void clearWritten(int index) {
+		this.written[index >> 6] &= ~(1L << index);
+	}
+
+	private void markWritten(int index) {
+		this.written[index >> 6] |= 1L << index;
 	}
 
 	public float getPosX(int index) {

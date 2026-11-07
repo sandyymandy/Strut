@@ -20,7 +20,7 @@ import java.util.regex.Pattern;
  * <pre>
  * {
  *   "bindings": {
- *     "pound":      { "sounds": ["mymod:misc.impact"] },
+ *     "strike":      { "sounds": ["mymod:misc.impact"] },
  *     "thumpmsg1":   { "sounds": ["mymod:thump"],
  *                     "random_sounds": ["mymod:ahh", { "sound": "mymod:mmm", "weight": 2 }, { "none": true, "weight": 3 }],
  *                     "mymod:messages": ["Hello"] }

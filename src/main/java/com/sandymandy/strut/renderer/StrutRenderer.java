@@ -195,7 +195,7 @@ public interface StrutRenderer<T extends StrutAnimatable> {
 		int packedOverlay = getPackedOverlay(animatable, 0, partialTick);
 		BakedStrutModel model = getStrutModel().getBakedModel(getStrutModel().getModelResource(animatable, this));
 
-		// the model can change between two draws of the same animatable (a body whose variant changes, a bare and a dressed file): its pose, handles and what is
+		// the model can change between two draws of the same animatable (a body whose variant changes, an alternate and a standard file): its pose, handles and what is
 		// resolved from them are made for the one it is drawn with now, before anything reads them. The animation step does this too, but it does not run for every draw
 		// (a second draw in one tick, a distant instance), and a pose made for a model with fewer bones is read past its end by one with more
 		getModelInstanceState(animatable).poseFor(model);

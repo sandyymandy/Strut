@@ -29,6 +29,12 @@ public final class ClientBoneOverrideState {
 	private final Map<OverrideKey, BoneOverride> synced = new Object2ObjectOpenHashMap<>();
 	private final Object2LongOpenHashMap<OverrideKey> lastSyncedSequence = new Object2LongOpenHashMap<>();
 	private final Map<OverrideKey, BoneOverride> local = new Object2ObjectOpenHashMap<>();
+	private long version;
+
+	/** Counts the changes made to what this holds, so what is worked out from it is worked out again only after one */
+	public long version() {
+		return this.version;
+	}
 
 	/**
 	 * Replaces every synced override wholesale, from a full snapshot - see
@@ -38,6 +44,7 @@ public final class ClientBoneOverrideState {
 	 * handled as a special case. Never touches {@link #local}
 	 */
 	public void applySnapshot(Map<OverrideKey, BoneOverride> snapshot) {
+		this.version++;
 		this.synced.clear();
 		this.lastSyncedSequence.clear();
 
@@ -58,6 +65,8 @@ public final class ClientBoneOverrideState {
 	public boolean applyDelta(OverrideKey key, long sequence, @Nullable BoneOverride override) {
 		if (sequence <= this.lastSyncedSequence.getLong(key))
 			return false;
+
+		this.version++;
 
 		if (override == null) {
 			this.synced.remove(key);
@@ -83,15 +92,18 @@ public final class ClientBoneOverrideState {
 		BoneOverride next = new BoneOverride(value, scope, priority, blendWeight, transitionTicks, 0);
 
 		// Idempotent: client code sets a per-viewer skin or colour every frame, and an unchanged value must not churn the map
-		if (!next.equals(this.local.get(key)))
+		if (!next.equals(this.local.get(key))) {
+			this.version++;
 			this.local.put(key, next);
+		}
 	}
 
 	/**
 	 * Clears this client's own local override for one bone/property, if it had one
 	 */
 	public void clearLocal(String bone, OverrideProperty property) {
-		this.local.remove(new OverrideKey(bone, property));
+		if (this.local.remove(new OverrideKey(bone, property)) != null)
+			this.version++;
 	}
 
 	/**
@@ -100,7 +112,8 @@ public final class ClientBoneOverrideState {
 	 * by the next one unless something sets it again
 	 */
 	public void clearFrameScopedLocal() {
-		this.local.values().removeIf(override -> override.scope() == OverrideScope.FRAME);
+		if (this.local.values().removeIf(override -> override.scope() == OverrideScope.FRAME))
+			this.version++;
 	}
 
 	/**

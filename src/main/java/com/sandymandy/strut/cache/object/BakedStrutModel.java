@@ -148,11 +148,14 @@ public record BakedStrutModel(List<GroupBoneDefinition> topLevelBones, List<Stru
 	 * @return An {@link Optional} containing the {@link GroupBoneDefinition} if one matches, otherwise an empty Optional
 	 */
 	public Optional<GroupBoneDefinition> getBone(String name) {
-		for (GroupBoneDefinition bone : this.topLevelBones) {
-			GroupBoneDefinition childBone = searchForChildBone(bone, name);
+		// flatBones is the same pre-order the tree search walks, so the first match is the same bone; the names' cached hashes rule most out at once
+		int hash = name.hashCode();
 
-			if (childBone != null)
-				return Optional.of(childBone);
+		for (GroupBoneDefinition bone : this.flatBones) {
+			String boneName = bone.getName();
+
+			if (boneName.hashCode() == hash && boneName.equals(name))
+				return Optional.of(bone);
 		}
 
 		return Optional.empty();
@@ -169,7 +172,11 @@ public record BakedStrutModel(List<GroupBoneDefinition> topLevelBones, List<Stru
 		if (parent.getName().equals(name))
 			return parent;
 
-		for (GroupBoneDefinition bone : parent.getChildBones()) {
+		List<GroupBoneDefinition> children = parent.getChildBones();
+
+		for (int i = 0, size = children.size(); i < size; i++) {
+			GroupBoneDefinition bone = children.get(i);
+
 			if (bone.getName().equals(name))
 				return bone;
 

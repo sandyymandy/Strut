@@ -12,7 +12,7 @@
 			["items-and-blocks.html", "Items, armor and blocks", "StrutItem armor block entity BlockEntity"],
 			["players.html", "Players with a Strut body", "player body morph disguise StrutPlayers PlayerBody replace render"],
 			["armour.html", "Armour", "armour armor slot set wearer profile look trim animal horse atlas StrutArmour ArmourWearer model attachment"],
-			["scenes.html", "Scenes", "scene cutscene paired participant role step sync group strip StrutScenes"],
+			["scenes.html", "Scenes", "scene cutscene paired participant role step sync group outfit StrutScenes"],
 			["models.html", "Models and files", "strutmodel strutanim blockbench folders convention builder"],
 			["animations.html", "Playing animations", "play seek setRate stop server authority controller"],
 			["events.html", "Events", "marker sound particle typed binding StrutEvents"],

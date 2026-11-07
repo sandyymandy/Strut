@@ -299,6 +299,13 @@ public final class ClothSolver {
 		final double[] weight;
 		int[] liveEdge = new int[0];
 		int[] liveBend = new int[0];
+		/** For each particle, the shapes (by index into this step's colliders) it can reach this step, {@code reachable[k * shapes + i]}, and how many */
+		int[] reachable = new int[0];
+		final int[] reachableCount;
+		double[] balls = new double[0];
+		Collider.Placed[] shapeArray = new Collider.Placed[0];
+		/** The shapes of one particle as a list, for the sweep */
+		final List<Collider.Placed> own = new java.util.ArrayList<>();
 
 		public State(int particles) {
 			this.weight = new double[particles];
@@ -311,6 +318,7 @@ public final class ClothSolver {
 			this.start = new double[particles][3];
 			this.pin = new float[particles];
 			this.touched = new boolean[particles];
+			this.reachableCount = new int[particles];
 		}
 
 		public void snapTo(double[][] anim) {
@@ -381,6 +389,11 @@ public final class ClothSolver {
 
 		applyPins(st, anim);
 
+		int shapes = colliders.size();
+
+		if (shapes > 0)
+			findReachable(st, p, colliders, entityDelta);
+
 		double stiffness = p.stiffness();
 		double bend = p.bend() * 0.5;
 
@@ -413,13 +426,10 @@ public final class ClothSolver {
 
 			applyPins(st, anim);
 
-			if (!colliders.isEmpty()) {
+			if (shapes > 0) {
 				for (int k = 0; k < n; k++) {
-					if (st.pin[k] >= 0.999f)
-						continue;
-
-					for (Collider.Placed shape : colliders)
-						st.touched[k] |= Collider.pushOut(shape, st.x[k], p.radius());
+					for (int i = 0, count = st.reachableCount[k]; i < count; i++)
+						st.touched[k] |= Collider.pushOut(st.shapeArray[st.reachable[k * shapes + i]], st.x[k], p.radius());
 				}
 			}
 		}
@@ -431,13 +441,17 @@ public final class ClothSolver {
 		if (p.volume() > 0f && topo.restVolume > 1e-9)
 			restoreVolume(topo, st, p.volume());
 
-		if (!colliders.isEmpty()) {
+		if (shapes > 0) {
 			// a cloth can pass over a shape between its particles: test the middle of each edge and push both ends
 			double[] mid = new double[3];
 
 			for (int e = 0; e < topo.edgeA.length; e++) {
 				int a = topo.edgeA[e];
 				int b = topo.edgeB[e];
+
+				// an edge with no shape near either end has nothing to pass over
+				if (st.reachableCount[a] == 0 && st.reachableCount[b] == 0)
+					continue;
 
 				for (int axis = 0; axis < 3; axis++)
 					mid[axis] = (st.x[a][axis] + st.x[b][axis]) * 0.5;
@@ -447,8 +461,11 @@ public final class ClothSolver {
 				double m2 = mid[2];
 				boolean moved = false;
 
-				for (Collider.Placed shape : colliders)
-					moved |= Collider.pushOut(shape, mid, p.radius());
+				for (int i = 0, count = st.reachableCount[a]; i < count; i++)
+					moved |= Collider.pushOut(st.shapeArray[st.reachable[a * shapes + i]], mid, p.radius());
+
+				for (int i = 0, count = st.reachableCount[b]; i < count; i++)
+					moved |= Collider.pushOut(st.shapeArray[st.reachable[b * shapes + i]], mid, p.radius());
 
 				if (moved) {
 					double[] d = {mid[0] - m0, mid[1] - m1, mid[2] - m2};
@@ -468,13 +485,21 @@ public final class ClothSolver {
 
 			// a shape has the last word, and a particle that travelled further this step than a block is thick is stopped where it first met one
 			for (int k = 0; k < n; k++) {
-				if (st.pin[k] >= 0.999f)
+				int count = st.reachableCount[k];
+
+				if (count == 0)
 					continue;
 
-				for (Collider.Placed shape : colliders)
-					st.touched[k] |= Collider.pushOut(shape, st.x[k], p.radius());
+				st.own.clear();
 
-				st.touched[k] |= Collider.sweep(colliders, st.start[k], st.x[k], st.prev[k], p.radius());
+				for (int i = 0; i < count; i++) {
+					Collider.Placed shape = st.shapeArray[st.reachable[k * shapes + i]];
+
+					st.own.add(shape);
+					st.touched[k] |= Collider.pushOut(shape, st.x[k], p.radius());
+				}
+
+				st.touched[k] |= Collider.sweep(st.own, st.start[k], st.x[k], st.prev[k], p.radius());
 			}
 		}
 
@@ -489,6 +514,77 @@ public final class ClothSolver {
 					st.prev[k][a] = st.x[k][a] - (st.x[k][a] - st.prev[k][a]) * (1.0 - p.friction());
 			}
 		}
+	}
+
+	/**
+	 * Works out, once a step, which shapes each free particle can reach: those whose bounding ball is within the particle's reach of it, at either end of the
+	 * step. A particle only goes a little way in a step (a firmly anchored flesh a very little), so most of a body's shapes are nowhere near it, and every
+	 * pass over the particles, the middles of the edges and the sweep then look at the few that are
+	 */
+	private static void findReachable(State st, ClothParams p, List<Collider.Placed> colliders, double[] entityDelta) {
+		int n = st.x.length;
+		int shapes = colliders.size();
+
+		if (st.reachable.length < n * shapes)
+			st.reachable = new int[n * shapes];
+
+		if (st.balls.length < shapes * 4) {
+			st.balls = new double[shapes * 4];
+			st.shapeArray = new Collider.Placed[shapes];
+		}
+
+		if (st.shapeArray.length < shapes)
+			st.shapeArray = new Collider.Placed[shapes];
+
+		double[] ball = new double[4];
+
+		for (int s = 0; s < shapes; s++) {
+			Collider.Placed shape = colliders.get(s);
+
+			st.shapeArray[s] = shape;
+			Collider.bound(shape, ball);
+			System.arraycopy(ball, 0, st.balls, s * 4, 4);
+		}
+
+		double travel = Math.sqrt(entityDelta[0] * entityDelta[0] + entityDelta[1] * entityDelta[1] + entityDelta[2] * entityDelta[2]);
+		double margin = (p.anchor() >= 5f ? 0.05 : 0.5) + 2 * travel + p.radius();
+
+		double[] gradient = new double[3];
+
+		for (int k = 0; k < n; k++) {
+			int count = 0;
+
+			if (st.pin[k] < 0.999f) {
+				double[] x = st.x[k];
+				double[] was = st.start[k];
+				double sx = x[0] - was[0];
+				double sy = x[1] - was[1];
+				double sz = x[2] - was[2];
+				boolean moved = sx * sx + sy * sy + sz * sz > 0.03 * 0.03;
+
+				for (int s = 0; s < shapes; s++) {
+					// the bounding ball first (a few multiplies), then how far the shape really is: the ball of a long box in a torso is most of the body
+					if (near(st, s, x, margin, gradient) || (moved && near(st, s, was, margin, gradient)))
+						st.reachable[k * shapes + count++] = s;
+				}
+			}
+
+			st.reachableCount[k] = count;
+		}
+	}
+
+	/** Whether shape {@code s} of this step is within {@code margin} of {@code at}: its bounding ball says it might be, and its own distance says it is */
+	private static boolean near(State st, int s, double[] at, double margin, double[] gradient) {
+		int b = s * 4;
+		double within = st.balls[b + 3] + margin;
+		double dx = at[0] - st.balls[b];
+		double dy = at[1] - st.balls[b + 1];
+		double dz = at[2] - st.balls[b + 2];
+
+		if (dx * dx + dy * dy + dz * dz > within * within)
+			return false;
+
+		return Collider.signedDistance(st.shapeArray[s], at[0], at[1], at[2], gradient) <= margin;
 	}
 
 	/**

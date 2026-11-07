@@ -32,8 +32,15 @@ public final class AnimationLod {
 	/** Every 2nd frame between {@link #NEAR_DISTANCE} and this radius */
 	private static final double MID_DISTANCE = 48;
 
-	private static final double NEAR_DISTANCE_SQ = NEAR_DISTANCE * NEAR_DISTANCE;
-	private static final double MID_DISTANCE_SQ = MID_DISTANCE * MID_DISTANCE;
+	/** How many entities may be inside the full radii; with more, the radii shrink with the square root of how many more, so a crowd shares what it can afford */
+	private static final int CROWD_FULL = 24;
+
+	/** The radii never shrink below this share of the full ones: what is close enough to see the stepping is always every frame */
+	private static final double SMALLEST = 0.45;
+
+	private static double nearSq = NEAR_DISTANCE * NEAR_DISTANCE;
+	private static double midSq = MID_DISTANCE * MID_DISTANCE;
+	private static int crowd;
 
 	/** Capped at this so even a very distant crowd still updates at a visible rate */
 	private static final int MAX_INTERVAL = 4;
@@ -51,6 +58,13 @@ public final class AnimationLod {
 	 */
 	public static void beginFrame(Camera camera) {
 		frameIndex++;
+
+		// the radii for this frame, from how many entities asked last frame
+		double scale = crowd <= CROWD_FULL ? 1 : Math.max(SMALLEST, Math.sqrt((double)CROWD_FULL / crowd));
+
+		nearSq = NEAR_DISTANCE * NEAR_DISTANCE * scale * scale;
+		midSq = MID_DISTANCE * MID_DISTANCE * scale * scale;
+		crowd = 0;
 
 		Vec3d pos = camera.getPos();
 		cameraX = pos.x;
@@ -75,6 +89,8 @@ public final class AnimationLod {
 		if (!(animatable instanceof Entity entity))
 			return true;
 
+		crowd++;
+
 		int interval = intervalFor(entity.squaredDistanceTo(cameraX, cameraY, cameraZ));
 
 		if (interval <= 1)
@@ -84,10 +100,10 @@ public final class AnimationLod {
 	}
 
 	private static int intervalFor(double squaredDistance) {
-		if (squaredDistance < NEAR_DISTANCE_SQ)
+		if (squaredDistance < nearSq)
 			return 1;
 
-		if (squaredDistance < MID_DISTANCE_SQ)
+		if (squaredDistance < midSq)
 			return 2;
 
 		return MAX_INTERVAL;

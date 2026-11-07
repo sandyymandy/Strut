@@ -86,7 +86,7 @@ public final class StrutBuiltinEvents {
 	}
 
 	/**
-	 * Marker names are lower-cased, so {@code becomeBare} and {@code becomebare} are one event
+	 * Marker names are lower-cased, so {@code changeLook} and {@code changelook} are one event
 	 */
 	private static String parseMarker(String text) {
 		String name = text.strip();

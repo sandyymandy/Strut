@@ -10,7 +10,7 @@ import java.util.Map;
  * One named table of bindings - typically one character's voice - loaded from a single JSON file
  * <p>
  * Keys are lower-case. Clips and tables were authored with inconsistent capitalisation
- * ({@code doggyfastMSG1} in the animation, {@code doggyFastMSG1} in the table) and only worked because
+ * ({@code stepfastMSG1} in the animation, {@code stepFastMSG1} in the table) and only worked because
  * both sides were lower-cased at lookup; doing it once, here, keeps that true
  *
  * @param id The set's id, from its file path

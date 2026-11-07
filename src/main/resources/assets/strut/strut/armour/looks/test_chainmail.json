@@ -1,0 +1,9 @@
+{
+  "set": "strut:test",
+  "match": {
+    "materials": [
+      "minecraft:chainmail"
+    ]
+  },
+  "column": 5
+}

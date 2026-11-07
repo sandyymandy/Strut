@@ -387,8 +387,10 @@ public final class ClothInstance {
 			this.placed.addAll(world);
 
 		if (others != null) {
+			boolean feelsOther = this.active.collidesWith().contains(Bodies.OTHER);
+
 			for (Collider.Placed shape : others) {
-				if (Bodies.feels(this.active.collidesWith(), shape))
+				if (Bodies.feels(this.active.collidesWith(), feelsOther, shape))
 					this.placed.add(shape);
 			}
 		}

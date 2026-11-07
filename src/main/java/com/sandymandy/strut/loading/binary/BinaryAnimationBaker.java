@@ -122,7 +122,7 @@ public final class BinaryAnimationBaker {
 		Map<BoneKey, List<RawChannel>> byBone = new Object2ObjectLinkedOpenHashMap<>();
 
 		for (RawChannel channel : clip.channels()) {
-			byBone.computeIfAbsent(new BoneKey(channel.targetKind(), channel.target()), key -> new ObjectArrayList<>())
+			byBone.computeIfAbsent(BoneKey.of(channel.targetKind(), channel.target()), key -> new ObjectArrayList<>())
 					.add(channel);
 		}
 

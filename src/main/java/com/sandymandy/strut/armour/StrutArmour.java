@@ -84,7 +84,7 @@ public final class StrutArmour {
 
 	/**
 	 * Hides or shows {@code slot} on {@code entity}, for everyone who can see it. Call it on the server; the flag is saved with the entity, so a character's
-	 * "show armour" button and a scene that strips her are one call
+	 * "show armour" button and a scene that hides it are one call
 	 */
 	public static void setHidden(Entity entity, String slot, boolean hidden) {
 		List<String> current = entity.getAttached(HIDDEN);
@@ -99,7 +99,7 @@ public final class StrutArmour {
 	}
 
 	/**
-	 * Hides the armour in every slot of {@code entity}, for everyone who can see it: a character undressing, a scene that wants her bare. Undone with
+	 * Hides the armour in every slot of {@code entity}, for everyone who can see it: a character changing outfit, a scene that wants it hidden. Undone with
 	 * {@link #showAll}, and the worn items are untouched
 	 */
 	public static void hideAll(Entity entity) {

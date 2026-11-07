@@ -44,6 +44,29 @@ public final class StepFrame {
 		this.alpha = alpha;
 	}
 
+	/** How far between the last two steps the frame falls: 0 is the earlier step, 1 the later */
+	public float alpha() {
+		return this.alpha;
+	}
+
+	/** The entity's yaw at the later step, degrees */
+	public float yaw() {
+		return this.yaw;
+	}
+
+	/** The entity's place at the later step, world blocks */
+	public double x() {
+		return this.x;
+	}
+
+	public double y() {
+		return this.y;
+	}
+
+	public double z() {
+		return this.z;
+	}
+
 	/**
 	 * The particle at world place {@code now} (placed by the last step) whose place before that step was {@code before} (or null), in the entity's model space
 	 * at this frame's fraction between the two

@@ -186,7 +186,7 @@ class MeshDeformPackTest {
 
 		// eight particles, not the thirty-two floats' worth of corners a value for each corner would take
 		assertEquals(1 + 8 * 4 * 2, pack.words());
-		assertEquals(-2, pack.data().getInt(0), "kind 0 (particles), from slot 0: -2 - (0 * 2 + 0)");
+		assertEquals(-2, pack.data().getInt(0), "kind 0 (particles), from slot 0: -2 - (0 * 4 + 0)");
 
 		for (int k = 0; k < 8; k++) {
 			int at = (pack.offsetBase() + k * 4) * 4;
@@ -223,7 +223,7 @@ class MeshDeformPackTest {
 		// four particles then the tip's three rows
 		assertEquals(2 + 7 * 4 * 2, pack.words());
 		assertEquals(-2, pack.data().getInt(0), "the pouch: particles from slot 0");
-		assertEquals(-2 - (4 * 2 + 1), pack.data().getInt(4), "the tip: rigid, from slot 4: -2 - (4 * 2 + 1)");
+		assertEquals(-2 - (4 * 4 + 1), pack.data().getInt(4), "the tip: rigid, from slot 4: -2 - (4 * 4 + 1)");
 
 		for (int row = 0; row < 3; row++) {
 			int at = (pack.offsetBase() + (4 + row) * 4) * 4;
@@ -248,7 +248,7 @@ class MeshDeformPackTest {
 
 		assertTrue(pack.build(new StrutMesh[] {perCorner, perParticle}, 1, i -> instance));
 		assertEquals(0, pack.data().getInt(0), "a value for each corner: its slot");
-		assertEquals(-2 - 4 * 2, pack.data().getInt(4), "then the particles' from slot 4");
+		assertEquals(-2 - 4 * 4, pack.data().getInt(4), "then the particles' from slot 4");
 		assertEquals(3f, pack.data().getFloat(pack.offsetBase() * 4));
 	}
 

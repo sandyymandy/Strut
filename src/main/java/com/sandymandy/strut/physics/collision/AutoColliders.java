@@ -73,11 +73,27 @@ public final class AutoColliders {
 
 	/** @param skip Bones that get no shape: those with shapes of their own authored */
 	public static List<Collider> generate(BakedStrutModel model, Options options, Set<String> skip) {
+		return generate(model, options, skip, Set.of());
+	}
+
+	/**
+	 * @param skip Bones that get no shape: those with shapes of their own authored
+	 * @param keep Bones whose shapes are made even when they are not among the biggest {@link Options#maxShapes()}: what a soft body is pressed by
+	 */
+	public static List<Collider> generate(BakedStrutModel model, Options options, Set<String> skip, Set<String> keep) {
+		return generate(model, options, skip, keep, false);
+	}
+
+	/**
+	 * @param fields true to make a signed distance field of every bone (and so one mesh shape a bone, cubes and meshes alike) even where the options ask for
+	 *               simple shapes or the global mesh collider switch is off: what a soft body collides with
+	 */
+	public static List<Collider> generate(BakedStrutModel model, Options options, Set<String> skip, Set<String> keep, boolean fields) {
 		record Candidate(Collider collider, float volume) {}
 
 		List<Candidate> found = new ArrayList<>();
 		// the model's fields, if they are made: null until then, and the simple shapes stand in
-		ModelSdfs.ModelSdf fields = "mesh".equals(options.precision()) && PhysicsOptions.meshColliders() ? ModelSdfs.get(model) : null;
+		ModelSdfs.ModelSdf made = fields || ("mesh".equals(options.precision()) && PhysicsOptions.meshColliders()) ? ModelSdfs.get(model) : null;
 
 		for (GroupBoneDefinition bone : model.flatBones()) {
 			if (bone == null || skip.contains(bone.getName()))
@@ -98,7 +114,7 @@ public final class AutoColliders {
 			float py = bone.getPivotY();
 			float pz = bone.getPivotZ();
 
-			MeshSdf field = fields != null && mode.equals("auto") ? fields.of(bone.getName()) : null;
+			MeshSdf field = made != null && mode.equals("auto") ? made.of(bone.getName()) : null;
 
 			if (field != null) {
 				float volume = (field.nx - 1) * (field.ny - 1) * (field.nz - 1) * field.cell * field.cell * field.cell;
@@ -143,10 +159,13 @@ public final class AutoColliders {
 		List<Collider> out = new ArrayList<>();
 
 		// a field is one shape a bone, however detailed the bone: there is room for every bone of a model
-		int limit = fields != null ? Math.max(options.maxShapes(), 256) : options.maxShapes();
+		int limit = made != null ? Math.max(options.maxShapes(), 256) : options.maxShapes();
 
-		for (int i = 0; i < found.size() && i < limit; i++)
-			out.add(found.get(i).collider());
+		for (int i = 0; i < found.size(); i++) {
+			// past the cap only the bones that must have one
+			if (i < limit || keep.contains(found.get(i).collider().bone()))
+				out.add(found.get(i).collider());
+		}
 
 		return out;
 	}

@@ -1,5 +1,7 @@
 package com.sandymandy.strut.animation.state;
 
+import com.sandymandy.strut.cache.object.PosableBone;
+
 import com.sandymandy.strut.cache.object.StrutMesh;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import it.unimi.dsi.fastutil.objects.Reference2ObjectMap;
@@ -176,6 +178,40 @@ public final class ModelInstance {
 	 * find an entity's own model without needing a renderer reference at all, from
 	 * {@link com.sandymandy.strut.model.ModelBounds}'s own visibility-box mixin
 	 */
+	/**
+	 * The map of this instance's handles an animation processor made for it, if it was made under {@code stamp} (which the processor changes whenever its bones
+	 * change) and for the model this instance is bound to now; null otherwise. Kept here because the handles are this instance's own, and making the map
+	 * again every frame for every bone was a large part of an animation's cost
+	 */
+	@Nullable
+	public <K, V> Map<K, V> handleMap(Object stamp) {
+		@SuppressWarnings("unchecked")
+		Map<K, V> map = this.handleMapStamp == stamp ? (Map<K, V>) this.handleMap : null;
+
+		return map;
+	}
+
+	/** Keeps {@code map} as {@link #handleMap} for {@code stamp}, and the same handles as an array in the processor's own order */
+	public void setHandleMap(Object stamp, Map<?, ?> map, PosableBone[] ordered) {
+		this.handleMap = map;
+		this.orderedHandles = ordered;
+		this.handleMapStamp = stamp;
+	}
+
+	/** The handles kept with {@link #handleMap}, in the processor's order, if made under {@code stamp}; null otherwise */
+	@Nullable
+	public PosableBone[] orderedHandles(Object stamp) {
+		return this.handleMapStamp == stamp ? this.orderedHandles : null;
+	}
+
+	@Nullable
+	private PosableBone[] orderedHandles;
+
+	@Nullable
+	private Map<?, ?> handleMap;
+	@Nullable
+	private Object handleMapStamp;
+
 	@Nullable
 	public BakedStrutModel boundModel() {
 		return this.boundModel;
@@ -285,7 +321,17 @@ public final class ModelInstance {
 		this.overrideState = overrides;
 		Pose resolved = resolveEffectivePose();
 		this.effective = processors ? runPoseProcessors(resolved) : resolved;
-		this.boneVisuals = resolveBoneVisuals();
+
+		// what the overrides colour and shift depends on them and the model alone, so it is kept until one changes
+		long version = overrides == null ? 0 : overrides.version();
+
+		if (this.visualsOf != overrides || this.visualsVersion != version || this.visualsModel != this.boundModel) {
+			this.boneVisuals = resolveBoneVisuals();
+			this.visualsOf = overrides;
+			this.visualsVersion = version;
+			this.visualsModel = this.boundModel;
+		}
+
 		this.boneTextures = resolveBoneTextures();
 		this.boneLayers = resolveBoneLayers();
 	}
@@ -319,6 +365,12 @@ public final class ModelInstance {
 
 		return this.unprepared;
 	}
+
+	@Nullable
+	private ClientBoneOverrideState visualsOf;
+	private long visualsVersion = -1;
+	@Nullable
+	private BakedStrutModel visualsModel;
 
 	/** Counts the times {@link #rendered} was written, so what is worked out from it is worked out again only when it has changed */
 	private long poseVersion;
@@ -558,7 +610,7 @@ public final class ModelInstance {
 	 * tree via {@link #resolveInherited}: a bone with no override of its own inherits its nearest
 	 * ancestor's, and a bone with its own always wins outright. {@code CHILDREN_HIDDEN} deliberately
 	 * does not: it stays literal-only (applied only to the exact bone it was set on, via
-	 * {@link #applyLiteral}), because its whole purpose is the one case inheritance itself cannot
+	 * the literal pass of {@link #posePlan}), because its whole purpose is the one case inheritance itself cannot
 	 * express - "hide every descendant unconditionally, with no way for any of them to opt back out."
 	 * Letting it inherit like everything else would mean a descendant's own {@code HIDDEN=false}
 	 * override could cancel it, which defeats the property's entire reason to exist as distinct from
@@ -579,8 +631,66 @@ public final class ModelInstance {
 		if (base == null || this.boundModel == null)
 			return base;
 
-		ClientBoneOverrideState overrides = this.overrideState;
-		Set<OverrideKey> activeKeys = overrides != null ? overrides.activeKeys() : Set.of();
+		PosePlan plan = posePlan(this.overrideState);
+
+		if (plan.count == 0 && !base.hasAnyChildrenHidden())
+			return base;
+
+		Pose scratch = effectiveScratch();
+
+		scratch.copyFrom(base);
+
+		for (int i = 0; i < plan.count; i++)
+			applyToPose(scratch, plan.index[i], plan.property[i], plan.value[i]);
+
+		propagateChildrenHidden(scratch);
+
+		return scratch;
+	}
+
+	/** What the overrides do to the pose, bone by bone and in the order they are applied: worked out again only when the overrides or the model change */
+	private static final class PosePlan {
+		int count;
+		int[] index = new int[16];
+		OverrideProperty[] property = new OverrideProperty[16];
+		OverrideValue[] value = new OverrideValue[16];
+
+		void add(int bone, OverrideProperty of, OverrideValue to) {
+			if (this.count == this.index.length) {
+				this.index = Arrays.copyOf(this.index, this.count * 2);
+				this.property = Arrays.copyOf(this.property, this.count * 2);
+				this.value = Arrays.copyOf(this.value, this.count * 2);
+			}
+
+			this.index[this.count] = bone;
+			this.property[this.count] = of;
+			this.value[this.count] = to;
+			this.count++;
+		}
+	}
+
+	private final PosePlan plan = new PosePlan();
+	@Nullable
+	private ClientBoneOverrideState planOf;
+	private long planVersion = -1;
+	@Nullable
+	private BakedStrutModel planModel;
+
+	private PosePlan posePlan(@Nullable ClientBoneOverrideState overrides) {
+		long version = overrides == null ? 0 : overrides.version();
+
+		if (this.planOf == overrides && this.planVersion == version && this.planModel == this.boundModel)
+			return this.plan;
+
+		this.plan.count = 0;
+		this.planOf = overrides;
+		this.planVersion = version;
+		this.planModel = this.boundModel;
+
+		if (overrides == null)
+			return this.plan;
+
+		Set<OverrideKey> activeKeys = overrides.activeKeys();
 		boolean anyPoseAffectingOverride = false;
 
 		for (OverrideKey key : activeKeys) {
@@ -591,52 +701,26 @@ public final class ModelInstance {
 			}
 		}
 
-		if (!anyPoseAffectingOverride && !base.hasAnyChildrenHidden())
-			return base;
+		if (!anyPoseAffectingOverride)
+			return this.plan;
 
-		Pose scratch = effectiveScratch();
+		GroupBoneDefinition[] flatBones = this.boundModel.flatBones();
 
-		scratch.copyFrom(base);
+		for (OverrideProperty property : POSE_PROPERTIES)
+			resolveInherited(overrides, activeKeys, property, flatBones, (index, value) -> this.plan.add(index, property, value));
 
-		if (overrides != null) {
-			GroupBoneDefinition[] flatBones = this.boundModel.flatBones();
-
-			for (OverrideProperty property : POSE_PROPERTIES) {
-				resolveInherited(overrides, activeKeys, property, flatBones,
-						(index, value) -> applyToPose(scratch, index, property, value));
-			}
-
-			applyLiteral(overrides, activeKeys, OverrideProperty.CHILDREN_HIDDEN, scratch);
-		}
-
-		propagateChildrenHidden(scratch);
-
-		return scratch;
-	}
-
-	/**
-	 * Applies {@code property}'s override only to the exact bone it was set on - no inheritance, the
-	 * behaviour every pose property had before {@link #resolveInherited} generalized the rest. Used
-	 * solely for {@code CHILDREN_HIDDEN}; see {@link #resolveEffectivePose()}'s own doc comment for
-	 * why that one property stays this way deliberately rather than joining {@link #POSE_PROPERTIES}
-	 */
-	private void applyLiteral(ClientBoneOverrideState overrides, Set<OverrideKey> activeKeys, OverrideProperty property, Pose scratch) {
 		for (OverrideKey key : activeKeys) {
-			if (key.property() != property)
+			if (key.property() != OverrideProperty.CHILDREN_HIDDEN)
 				continue;
 
-			BoneOverride override = overrides.resolve(key.bone(), property);
+			BoneOverride override = overrides.resolve(key.bone(), OverrideProperty.CHILDREN_HIDDEN);
+			Optional<GroupBoneDefinition> definition = override == null ? Optional.empty() : this.boundModel.getBone(key.bone());
 
-			if (override == null)
-				continue;
-
-			Optional<GroupBoneDefinition> definition = this.boundModel.getBone(key.bone());
-
-			if (definition.isEmpty())
-				continue;
-
-			applyToPose(scratch, definition.get().getIndex(), property, override.value());
+			if (definition.isPresent())
+				this.plan.add(definition.get().getIndex(), OverrideProperty.CHILDREN_HIDDEN, override.value());
 		}
+
+		return this.plan;
 	}
 
 	/**
@@ -974,6 +1058,10 @@ public final class ModelInstance {
 		if (this.boundModel == model)
 			return;
 
+		this.handleMap = null;
+		this.orderedHandles = null;
+		this.handleMapStamp = null;
+
 		GroupBoneDefinition[] definitions = model.flatBones();
 		Pose pose = new Pose(definitions.length);
 
@@ -1029,6 +1117,8 @@ public final class ModelInstance {
 		this.effective = null;
 		this.boneVisualsScratch = null;
 		this.boneVisuals = null;
+		this.visualsVersion = -1;
+		this.planVersion = -1;
 		this.boneTexturesScratch = null;
 		this.boneTextures = null;
 		this.boneLayersScratch = null;

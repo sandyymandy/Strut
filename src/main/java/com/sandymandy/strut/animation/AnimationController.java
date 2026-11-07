@@ -317,7 +317,15 @@ public class AnimationController<T extends StrutAnimatable> {
 	/**
 	 * Gets the currently loaded animation's {@link BoneAnimationQueue BoneAnimationQueues}.
 	 */
+	/** {@link #getBoneAnimationQueues()} for the processor's own walk, which only reads the queues: the next frame can still keep them */
+	Map<BoneKey, BoneAnimationQueue> boneAnimationQueuesForProcessing() {
+		return this.boneAnimationQueues;
+	}
+
 	public Map<BoneKey, BoneAnimationQueue> getBoneAnimationQueues() {
+		// a caller may change the map (a reset clears it): the next frame makes the queues again
+		this.queuedBones = null;
+
 		return this.boneAnimationQueues;
 	}
 
@@ -1102,12 +1110,29 @@ public class AnimationController<T extends StrutAnimatable> {
 	 * @param bones The registered bones from the {@link AnimationProcessor}, keyed the same way
 	 */
 	private void createInitialQueues(Map<BoneKey, PosableBone> bones) {
-		this.boneAnimationQueues.clear();
+		// The same bones as last frame (a map is made once for each model an instance is bound to, and kept): their queues are emptied and used again, rather
+		// than nine new lists made for every bone every frame
+		if (bones == this.queuedBones && this.boneAnimationQueues.size() == bones.size()) {
+			this.usedQueues.clear();
 
-		for (Map.Entry<BoneKey, PosableBone> entry : bones.entrySet()) {
-			this.boneAnimationQueues.put(entry.getKey(), new BoneAnimationQueue(entry.getValue()));
+			return;
 		}
+
+		this.boneAnimationQueues.clear();
+		this.usedQueues.clear();
+
+		for (Map.Entry<BoneKey, PosableBone> entry : FastMaps.entries(bones)) {
+			this.boneAnimationQueues.put(entry.getKey(), new BoneAnimationQueue(entry.getValue(), this.usedQueues));
+		}
+
+		this.queuedBones = bones;
 	}
+
+	/** The queues something was added to since they were last emptied: all {@link #createInitialQueues} needs to empty */
+	private final AnimationPointQueue.Used usedQueues = new AnimationPointQueue.Used();
+
+	/** The bones {@link #boneAnimationQueues} was made for, so the next frame with the same ones can keep the queues */
+	private Map<BoneKey, PosableBone> queuedBones;
 
 	/**
 	 * Cache the relevant {@link BoneSnapshot BoneSnapshots} for the current {@link AnimationProcessor.QueuedAnimation}
@@ -1153,8 +1178,24 @@ public class AnimationController<T extends StrutAnimatable> {
 	 */
 	private AnimationPoint getAnimationPointAtTick(List<Keyframe<MathValue>> frames, double tick, boolean isRotation,
 												   Axis axis) {
-		KeyframeLocation<Keyframe<MathValue>> location = getCurrentKeyFrameLocation(frames, tick);
-		Keyframe<MathValue> currentFrame = location.keyframe();
+		// the keyframe the tick falls in and the tick its start is at, found in place: a location object for each axis of each bone every frame adds up
+		Keyframe<MathValue> currentFrame = frames.getLast();
+		double startTick = tick;
+		double totalFrameTime = 0;
+
+		for (int i = 0, size = frames.size(); i < size; i++) {
+			Keyframe<MathValue> frame = frames.get(i);
+
+			totalFrameTime += frame.length();
+
+			if (totalFrameTime > tick) {
+				currentFrame = frame;
+				startTick = tick - (totalFrameTime - frame.length());
+
+				break;
+			}
+		}
+
 		double startValue = currentFrame.startValue().get();
 		double endValue = currentFrame.endValue().get();
 
@@ -1174,28 +1215,7 @@ public class AnimationController<T extends StrutAnimatable> {
 			}
 		}
 
-		return new AnimationPoint(currentFrame, location.startTick(), currentFrame.length(), startValue, endValue);
-	}
-
-	/**
-	 * Returns the {@link Keyframe} relevant to the current tick time
-	 *
-	 * @param frames The list of {@code KeyFrames} to filter through
-	 * @param ageInTicks The current tick time
-	 * @return A new {@code KeyFrameLocation} containing the current {@code KeyFrame} and the tick time used to find it
-	 */
-	private KeyframeLocation<Keyframe<MathValue>> getCurrentKeyFrameLocation(List<Keyframe<MathValue>> frames,
-																			 double ageInTicks) {
-		double totalFrameTime = 0;
-
-		for (Keyframe<MathValue> frame : frames) {
-			totalFrameTime += frame.length();
-
-			if (totalFrameTime > ageInTicks)
-				return new KeyframeLocation<>(frame, (ageInTicks - (totalFrameTime - frame.length())));
-		}
-
-		return new KeyframeLocation<>(frames.getLast(), ageInTicks);
+		return new AnimationPoint(currentFrame, startTick, currentFrame.length(), startValue, endValue);
 	}
 
 	/**

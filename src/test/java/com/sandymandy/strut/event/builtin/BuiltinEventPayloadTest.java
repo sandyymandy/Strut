@@ -114,7 +114,7 @@ class BuiltinEventPayloadTest {
 	@Test
 	@DisplayName("marker names are validated and lower-cased")
 	void markerParsing() {
-		assertEquals("becomebare", StrutBuiltinEvents.MARKER.parse("  becomeBare "));
+		assertEquals("changelook", StrutBuiltinEvents.MARKER.parse("  changeLook "));
 		assertThrows(IllegalArgumentException.class, () -> StrutBuiltinEvents.MARKER.parse("two words"));
 		assertThrows(IllegalArgumentException.class, () -> StrutBuiltinEvents.MARKER.parse(""));
 	}

@@ -12,7 +12,7 @@ import java.util.regex.Pattern;
 /**
  * The text grammar of a clip's <b>custom instruction channel</b>: one typed event per line
  * <pre>
- * mymod:inflate 2.5           a namespaced type id, then its payload text
+ * mymod:swell 2.5           a namespaced type id, then its payload text
  * mymod:fade_to_black          a type with no payload
  * swap_end                  a bare word: shorthand for strut:marker swap_end
  * [server] mymod:strike        modifiers in square brackets, before the type
@@ -35,8 +35,8 @@ import java.util.regex.Pattern;
  * at the very start of a line is a modifier list: a payload may contain brackets freely
  *
  * <p>A bare word takes no payload, and is lower-cased: a consumer mod already compares every marker
- * name case-insensitively, so normalising here removes the class of bug where {@code becomeBare} and
- * {@code becomebare} are different events
+ * name case-insensitively, so normalising here removes the class of bug where {@code changeLook} and
+ * {@code changelook} are different events
  */
 public final class EventLine {
 	private static final Pattern BARE_MARKER = Pattern.compile("[A-Za-z0-9_./-]+");

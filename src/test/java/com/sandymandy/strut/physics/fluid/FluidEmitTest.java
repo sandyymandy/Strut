@@ -89,7 +89,7 @@ class FluidEmitTest {
 	}
 
 	@Test
-	@DisplayName("registered presets are found by id, and an unknown one is the thick liquid")
+	@DisplayName("registered presets are found by id, and an unknown one is the fluid")
 	void registry() {
 		Identifier id = Identifier.of("test", "honey");
 		FluidParams honey = new FluidParams(0.2f, 0.09f, 0.05f, 0.5f, 0.5f, 9.8f, 0.4f, 20f, 2f, 0xFFD8A030, 0.35f, 0.09f);

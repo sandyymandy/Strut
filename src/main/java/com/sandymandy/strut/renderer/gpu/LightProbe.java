@@ -6,9 +6,11 @@ import com.sandymandy.strut.renderer.hook.StrutLighting;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
+import net.minecraft.client.MinecraftClient;
 import net.minecraft.entity.Entity;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.MathHelper;
+import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.LightType;
 import net.minecraft.world.World;
 import org.jetbrains.annotations.Nullable;
@@ -80,8 +82,10 @@ public final class LightProbe {
 	private static final Int2ObjectOpenHashMap<Eased> EASED = new Int2ObjectOpenHashMap<>();
 
 	/** How far a light source is looked for, in blocks, and how often (in ticks) a model looks again */
-	private static final int EMITTER_RADIUS = 8;
-	private static final int EMITTER_PERIOD = 8;
+	private static final int EMITTER_RADIUS = 6;
+	private static final int EMITTER_PERIOD = 10;
+	/** Beyond this many blocks from the camera a model is lit by the sky alone: nobody can see which side of it a lamp lights, and a crowd would cost a search each */
+	private static final double EMITTER_DISTANCE = 40.0;
 
 	private static String strongestSource = "none";
 
@@ -102,12 +106,13 @@ public final class LightProbe {
 
 		Vector3d centre = new Vector3d(entity.getX(), entity.getY() + entity.getHeight() * 0.5, entity.getZ());
 		BlockPos pos = BlockPos.ofFloored(centre.x, centre.y, centre.z);
-		long emitterTick = cached == null ? Long.MIN_VALUE : cached.emitterTick;
+		// a model seen for the first time looks a few ticks later, a different number for each, so a crowd that comes into view together does not all search in one tick
+		long emitterTick = cached == null ? world.getTime() - Math.floorMod(entity.getId(), EMITTER_PERIOD) : cached.emitterTick;
 		List<LightMerge.Light> emitters = cached == null ? List.of() : cached.emitters;
 
 		// the lamps and torches round it are looked for every few ticks, not every one
 		if (world.getTime() - emitterTick >= EMITTER_PERIOD || world.getTime() < emitterTick) {
-			emitters = emitters(world, pos, centre);
+			emitters = nearCamera(centre) ? emitters(world, pos, centre) : List.of();
 			emitterTick = world.getTime();
 		}
 
@@ -121,6 +126,20 @@ public final class LightProbe {
 		CACHE.put(entity.getId(), new Cached(world.getTime(), rig, emitterTick, emitters));
 
 		return rig;
+	}
+
+	private static boolean nearCamera(Vector3d centre) {
+		MinecraftClient client = MinecraftClient.getInstance();
+
+		if (client.gameRenderer == null || client.gameRenderer.getCamera() == null)
+			return true;
+
+		Vec3d camera = client.gameRenderer.getCamera().getPos();
+		double dx = centre.x - camera.x;
+		double dy = centre.y - camera.y;
+		double dz = centre.z - camera.z;
+
+		return dx * dx + dy * dy + dz * dz <= EMITTER_DISTANCE * EMITTER_DISTANCE;
 	}
 
 	/**
